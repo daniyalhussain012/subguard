@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body { @apply bg-[#0F172A] text-slate-100 antialiased; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { @apply bg-slate-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-700 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-500; }
+
+  select option { @apply bg-slate-800 text-slate-100; }
+}
+
+@layer components {
+  /* ─ Cards ─ */
+  .card {
+    @apply bg-[#1E293B] border border-slate-700/50 rounded-xl;
+  }
+  .card-hover {
+    @apply hover:bg-[#334155] hover:border-slate-600/60 transition-all duration-200 cursor-pointer;
+  }
+  .card-glow {
+    @apply shadow-lg shadow-cyan-500/5;
+  }
+
+  /* ─ Buttons ─ */
+  .btn-primary {
+    @apply bg-cyan-500 hover:bg-cyan-400 active:scale-95 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm;
+  }
+  .btn-secondary {
+    @apply bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 font-medium px-4 py-2 rounded-lg transition-all duration-150 flex items-center gap-2 text-sm;
+  }
+  .btn-danger {
+    @apply bg-red-500/15 hover:bg-red-500/25 active:scale-95 text-red-400 hover:text-red-300 font-medium px-3 py-1.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 text-sm border border-red-500/20;
+  }
+  .btn-success {
+    @apply bg-emerald-500/15 hover:bg-emerald-500/25 active:scale-95 text-emerald-400 font-medium px-3 py-1.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 text-sm border border-emerald-500/20;
+  }
+  .btn-icon {
+    @apply p-2 rounded-lg hover:bg-slate-700/60 text-slate-400 hover:text-slate-200 transition-all duration-150 active:scale-90;
+  }
+  .btn-ghost {
+    @apply text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 px-3 py-1.5 rounded-lg transition-all duration-150 text-sm font-medium flex items-center gap-1.5;
+  }
+
+  /* ─ Forms ─ */
+  .input {
+    @apply bg-slate-900/80 border border-slate-600/50 rounded-lg px-3 py-2.5 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 focus:border-cyan-500/50 transition-all duration-200 w-full text-sm;
+  }
+  .label {
+    @apply text-xs font-semibold text-slate-400 mb-1.5 block uppercase tracking-wide;
+  }
+
+  /* ─ Badges ─ */
+  .badge { @apply px-2 py-0.5 rounded-full text-xs font-semibold; }
+  .badge-active { @apply bg-emerald-500/15 text-emerald-400 border border-emerald-500/25; }
+  .badge-paused { @apply bg-amber-500/15 text-amber-400 border border-amber-500/25; }
+  .badge-cancelled { @apply bg-red-500/15 text-red-400 border border-red-500/25; }
+  .badge-review { @apply bg-blue-500/15 text-blue-400 border border-blue-500/25; }
+
+  /* ─ Navigation ─ */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:text-slate-100 hover:bg-slate-700/40 transition-all duration-200 font-medium text-sm;
+  }
+  .nav-item-active {
+    @apply bg-cyan-500/15 text-cyan-400 hover:bg-cyan-500/20 hover:text-cyan-300 border border-cyan-500/20;
+  }
+
+  /* ─ Layout ─ */
+  .page-header {
+    @apply text-2xl font-bold text-slate-100 mb-1;
+  }
+  .page-sub {
+    @apply text-sm text-slate-500 mb-6;
+  }
+  .section-title {
+    @apply text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3;
+  }
+  .stat-card {
+    @apply card p-5 flex flex-col gap-2;
+  }
+
+  /* ─ Modals ─ */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+  .modal {
+    @apply card p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto;
+  }
+
+  /* ─ Risk indicators ─ */
+  .risk-essential {
+    @apply bg-emerald-500/10 border-emerald-500/30 text-emerald-400;
+  }
+  .risk-nice {
+    @apply bg-amber-500/10 border-amber-500/30 text-amber-400;
+  }
+  .risk-cancel {
+    @apply bg-red-500/10 border-red-500/30 text-red-400;
+  }
+
+  /* ─ Timeline ─ */
+  .timeline-dot {
+    @apply w-2.5 h-2.5 rounded-full shrink-0;
+  }
+
+  /* ─ Alert types ─ */
+  .alert-danger { @apply border-red-500/30 bg-red-500/5; }
+  .alert-warning { @apply border-amber-500/30 bg-amber-500/5; }
+  .alert-info { @apply border-cyan-500/30 bg-cyan-500/5; }
+  .alert-success { @apply border-emerald-500/30 bg-emerald-500/5; }
+
+  /* ─ Calendar ─ */
+  .calendar-day {
+    @apply min-h-[72px] p-1 rounded-lg border border-slate-700/30 text-xs transition-colors duration-150 bg-slate-800/30;
+  }
+  .calendar-day-today { @apply ring-2 ring-cyan-500/60; }
+  .calendar-day-other { @apply opacity-25; }
+}
+
+/* Light mode overrides */
+html:not(.dark) body { @apply bg-slate-100 text-slate-900; }
+html:not(.dark) .card { @apply bg-white border-slate-200; }
+html:not(.dark) .input { @apply bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400; }
+html:not(.dark) .nav-item { @apply text-slate-600 hover:text-slate-900 hover:bg-slate-100; }
+html:not(.dark) .stat-card { @apply bg-white border-slate-200; }
+html:not(.dark) .calendar-day { @apply bg-white border-slate-200; }
+
+/* ─ Pulse animation for urgent banner ─ */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+.pulse-glow { animation: pulseGlow 2s infinite; }
+
+/* ─ Skeleton loading ─ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply rounded-lg;
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

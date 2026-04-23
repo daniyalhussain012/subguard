@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(pkill -f \"vite\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node -e \"require\\('dotenv'\\); require\\('express'\\); require\\('googleapis'\\); console.log\\('all ok'\\)\")",
+      "Bash(curl -s http://localhost:3001/api/status)",
+      "Bash(pkill -f \"node server/index.js\")",
+      "Bash(curl -s http://localhost:5173 -o /dev/null -w \"Frontend HTTP %{http_code}\")",
+      "Bash(npx kill-port *)"
+    ]
+  }
+}
