@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import { useApp } from '../App'
 import { KEYS, AVATAR_OPTIONS, defaultSettings } from '../utils/storage'
-import { requestNotificationPermission } from '../utils/notifications'
+import { requestNotificationPermission, subscribeToPush, unsubscribeFromPush, getPushSubscriptionStatus } from '../utils/notifications'
 
 function Toggle({ value, onChange }) {
   return (
@@ -56,6 +56,8 @@ export default function Settings() {
   const [importError, setImportError] = useState('')
   const [installPrompt, setInstallPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(false)
+  const [pushSubscribed, setPushSubscribed] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
 
   const notifs = settings.notifications || {}
   const display = settings.display || {}
@@ -65,6 +67,7 @@ export default function Settings() {
     const handler = (e) => { e.preventDefault(); setInstallPrompt(e) }
     window.addEventListener('beforeinstallprompt', handler)
     if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true)
+    getPushSubscriptionStatus().then(setPushSubscribed)
     return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
@@ -83,7 +86,25 @@ export default function Settings() {
   async function handleRequestNotifications() {
     const result = await requestNotificationPermission()
     setNotifStatus(result)
-    if (result === 'granted') updateNotif('enabled', true)
+    if (result === 'granted') {
+      updateNotif('enabled', true)
+      setPushLoading(true)
+      const sub = await subscribeToPush()
+      setPushSubscribed(!!sub)
+      setPushLoading(false)
+    }
+  }
+
+  async function handleTogglePush() {
+    setPushLoading(true)
+    if (pushSubscribed) {
+      await unsubscribeFromPush()
+      setPushSubscribed(false)
+    } else {
+      const sub = await subscribeToPush()
+      setPushSubscribed(!!sub)
+    }
+    setPushLoading(false)
   }
 
   async function handleInstall() {
@@ -225,10 +246,28 @@ export default function Settings() {
 
       {/* Push Notifications */}
       <Section icon={Bell} title="Push Notifications">
-        <div className="mb-4">
+        {/* 3-stage explanation */}
+        <div className="mb-4 p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 space-y-1.5">
+          <div className="text-xs font-semibold text-cyan-400 mb-2">3-Stage Renewal Reminder System</div>
+          <div className="flex items-start gap-2 text-xs text-slate-400">
+            <span className="text-base leading-none">🔔</span>
+            <span><strong className="text-slate-200">7 days before</strong> — First heads-up. Dismiss to skip reminders for this cycle.</span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-slate-400">
+            <span className="text-base leading-none">⚠️</span>
+            <span><strong className="text-slate-200">2 days before</strong> — Second alert (skipped if you dismissed stage 1).</span>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-slate-400">
+            <span className="text-base leading-none">🚨</span>
+            <span><strong className="text-slate-200">1 day before</strong> — Final warning. Always fires, last chance to cancel.</span>
+          </div>
+        </div>
+
+        {/* Status & subscribe button */}
+        <div className="mb-4 space-y-2">
           {notifStatus === 'unsupported' && (
             <div className="flex items-center gap-2 text-xs text-slate-500 p-3 bg-slate-800/40 border border-slate-700/40 rounded-lg">
-              <AlertCircle size={14} /> Your browser doesn't support notifications
+              <AlertCircle size={14} /> Your browser doesn't support push notifications
             </div>
           )}
           {notifStatus === 'denied' && (
@@ -236,17 +275,30 @@ export default function Settings() {
               <XCircle size={14} /> Notifications blocked — go to browser Settings → Site Settings → Notifications to re-enable
             </div>
           )}
-          {notifStatus === 'granted' && (
-            <div className="flex items-center gap-2 text-xs text-emerald-400 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
-              <CheckCircle size={14} /> Push notifications are active — alerts appear even when the app is in the background
+          {notifStatus === 'granted' ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs text-emerald-400 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
+                <CheckCircle size={14} />
+                {pushSubscribed
+                  ? 'Background push notifications active — works even when app is closed'
+                  : 'Notifications allowed but not yet subscribed to background push'}
+              </div>
+              <button
+                onClick={handleTogglePush}
+                disabled={pushLoading}
+                className={`btn-${pushSubscribed ? 'secondary' : 'primary'} w-full justify-center`}
+              >
+                <Bell size={14} />
+                {pushLoading ? 'Working...' : pushSubscribed ? 'Disable Background Push' : 'Enable Background Push (recommended)'}
+              </button>
             </div>
-          )}
-          {notifStatus !== 'granted' && notifStatus !== 'denied' && notifStatus !== 'unsupported' && (
-            <button onClick={handleRequestNotifications} className="btn-primary w-full justify-center mb-4">
-              <Bell size={14} /> Enable Push Notifications
+          ) : notifStatus !== 'denied' && notifStatus !== 'unsupported' ? (
+            <button onClick={handleRequestNotifications} disabled={pushLoading} className="btn-primary w-full justify-center">
+              <Bell size={14} /> {pushLoading ? 'Setting up...' : 'Enable Push Notifications'}
             </button>
-          )}
+          ) : null}
         </div>
+
         <SettingRow label="Notifications Enabled" sub="Master toggle for all alerts">
           <Toggle value={notifs.enabled || false} onChange={v => updateNotif('enabled', v)} />
         </SettingRow>

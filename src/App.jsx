@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
 import { initData, KEYS, defaultSettings } from './utils/storage'
-import { checkAndSendNotifications, registerServiceWorker } from './utils/notifications'
+import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1 } from './utils/notifications'
 
 // Lazy-loaded pages
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -104,6 +104,24 @@ export default function App() {
     if (!localStorage.getItem('subguard_onboarding_done')) {
       setShowOnboarding(true)
     }
+    // Handle "Don't remind this cycle" action from service worker notification click
+    const handleSWMessage = (event) => {
+      if (event.data?.type === 'DISMISS_NOTIF_CYCLE') {
+        const { subId, renewalDate } = event.data
+        if (subId && renewalDate) dismissNotifStage1(subId, renewalDate)
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage)
+    // Also handle dismiss from URL param (when app was closed and reopened)
+    const params = new URLSearchParams(window.location.search)
+    const dismissKey = params.get('dismiss')
+    if (dismissKey) {
+      const [subId, ...rest] = dismissKey.split('_')
+      const renewalDate = rest.join('_')
+      if (subId && renewalDate) dismissNotifStage1(subId, renewalDate)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+    return () => navigator.serviceWorker?.removeEventListener('message', handleSWMessage)
   }, [])
 
   useEffect(() => {
