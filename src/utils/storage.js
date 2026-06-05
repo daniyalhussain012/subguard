@@ -121,8 +121,8 @@ export function buildSampleData() {
   const old60 = new Date(Date.now() - 60 * 86400000).toISOString()
 
   const members = [
-    { id: meId, name: 'Daniyal', role: 'Me', avatar: '👨', createdAt: now },
-    { id: partnerId, name: 'Sarah', role: 'Partner/Spouse', avatar: '👩', createdAt: now },
+    { id: meId, name: 'Me', role: 'Me', avatar: '👤', createdAt: now },
+    { id: partnerId, name: 'Partner', role: 'Partner/Spouse', avatar: '👤', createdAt: now },
   ]
 
   const sub = (overrides) => ({
@@ -176,7 +176,7 @@ export function defaultSettings() {
   return {
     darkMode: true,
     currency: 'USD',
-    profile: { name: 'Daniyal', avatar: '👨' },
+    profile: { name: '', avatar: '👤' },
     notifications: {
       enabled: false,
       remindDaysBefore: [2, 7],

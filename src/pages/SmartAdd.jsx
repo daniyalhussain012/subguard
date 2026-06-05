@@ -111,7 +111,7 @@ export default function SmartAdd() {
       ...parsed,
       nextBillingDate: parsed.nextBillingDate || format(addDays(new Date(), 30), 'yyyy-MM-dd'),
     }
-    sessionStorage.setItem('subtracker_prefill', JSON.stringify(prefill))
+    sessionStorage.setItem('subguard_prefill', JSON.stringify(prefill))
     navigate('/add')
   }
 
@@ -256,3 +256,4 @@ Visa ending 4242"`}
     </div>
   )
 }
+  
