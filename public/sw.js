@@ -43,4 +43,43 @@ self.addEventListener('push', e => {
   e.waitUntil(self.registration.showNotification(data.title || 'SubGuard', options))
 })
 
-// ── Notification Action Clicks ────
+// ── Notification Action Clicks ──────────────────────────────────────────────
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const { action } = e
+  const { url, subId, renewalDate, stage } = e.notification.data || {}
+
+  // If user taps "Don't remind this cycle" on stage-1 notification
+  if (action === 'dismiss-cycle' && subId && renewalDate) {
+    // Post message to all clients so the app can update localStorage
+    e.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+        list.forEach(client => client.postMessage({
+          type: 'DISMISS_NOTIF_CYCLE',
+          subId,
+          renewalDate,
+        }))
+        // If no app open, open it to handle the dismiss
+        if (!list.length) return clients.openWindow(`/?dismiss=${subId}_${renewalDate}`)
+      })
+    )
+    return
+  }
+
+  // "Cancel subscription" — open cancellation center
+  if (action === 'go-cancel') {
+    e.waitUntil(clients.openWindow('/cancellation'))
+    return
+  }
+
+  // "Keep" or notification body tap — open home
+  const target = url || '/'
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      const existing = list.find(c => c.url.includes(self.location.origin))
+      if (existing) return existing.focus()
+      return clients.openWindow(target)
+    })
+  )
+})
