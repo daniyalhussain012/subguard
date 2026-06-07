@@ -1,6 +1,19 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 const AuthContext = createContext(null);
 const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com';
+
+async function fetchWithRetry(url, options, retries = 4, delayMs = 2000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      return res;
+    } catch (e) {
+      if (i === retries) throw e;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -8,18 +21,20 @@ export function AuthProvider({ children }) {
   useEffect(() => { if (token) { fetchUser(); } else { setLoading(false); } }, [token]);
   const fetchUser = async () => {
     try {
-      const res = await fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetchWithRetry(
+        `${API_URL}/auth/me`,
+        { headers: { Authorization: `Bearer ${token}` } },
+        4,    // up to 4 retries
+        3000  // 3 seconds between retries (handles Render cold start)
+      );
       if (res.ok) {
         setUser(await res.json());
-      } else if (res.status === 401) {
-        // Token is invalid or expired — log out
+      } else {
         logout();
-        return;
       }
-      // For other HTTP errors (5xx, etc.) keep the token and try again next time
     } catch (e) {
-      // Network error (e.g. Render cold start) — don't log out, keep token
-      console.warn('[Auth] fetchUser network error, keeping session');
+      // Network totally unavailable even after retries — don't logout, keep token
+      console.warn('[Auth] fetchUser failed after retries:', e.message);
     } finally {
       setLoading(false);
     }
