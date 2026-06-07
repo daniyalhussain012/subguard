@@ -51,6 +51,12 @@ function AuthGate({ children }) {
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return children
 }
+function PublicRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth()
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" /></div>
+  if (isAuthenticated) return <Navigate to="/" replace />
+  return children
+}
 function AnimatedRoutes() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -73,7 +79,7 @@ function AnimatedRoutes() {
       <motion.div key={location.pathname} variants={pageVariants} initial="initial" animate="animate" exit="exit" style={{ minHeight: '100%' }}>
         <Suspense fallback={<PageLoader />}>
           <Routes location={location}>
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
