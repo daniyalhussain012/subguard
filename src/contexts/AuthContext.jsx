@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
     } catch { logout(); } finally { setLoading(false); }
   };
   const loginWithGoogle = () => { window.location.href = `${API_URL}/auth/login/google`; };
-  const handleAuthCallback = (t) => { localStorage.setItem('subguard_token', t); setToken(t); };
+  const handleAuthCallback = (t) => { localStorage.setItem('subguard_token', t); setLoading(true); setToken(t); };
   const logout = () => { localStorage.removeItem('subguard_token'); setToken(null); setUser(null); };
   const refreshUser = async () => { if (token) await fetchUser(); };
   return (
