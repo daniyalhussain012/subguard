@@ -1,10 +1,7 @@
-const CACHE_NAME = 'subguard-v2'
-const SHELL = ['/', '/index.html']
+const CACHE_NAME = 'subguard-v3'
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
-  )
+  e.waitUntil(self.skipWaiting())
 })
 
 self.addEventListener('activate', e => {
@@ -18,18 +15,51 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
   if (!e.request.url.startsWith(self.location.origin)) return
+
+  const url = new URL(e.request.url)
+
+  // Navigation requests: ALWAYS fetch fresh from network so index.html is never stale.
+  // This prevents blank pages when Vite bundle hashes change on each deploy.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone()
+          caches.open(CACHE_NAME).then(c => c.put('/', clone))
+          return res
+        })
+        .catch(() => caches.match('/') || caches.match('/index.html'))
+    )
+    return
+  }
+
+  // Content-hashed assets: cache-first (hash guarantees freshness)
+  if (url.pathname.startsWith('/assets/')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached
+        return fetch(e.request).then(res => {
+          if (res.ok) {
+            const clone = res.clone()
+            caches.open(CACHE_NAME).then(c => c.put(e.request, clone))
+          }
+          return res
+        })
+      })
+    )
+    return
+  }
+
+  // Everything else: network-first
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match('/')))
+    fetch(e.request).catch(() => caches.match(e.request))
   )
 })
-
-// ── Push Notifications ──────────────────────────────────────────────────────
 
 self.addEventListener('push', e => {
   if (!e.data) return
   let data = {}
   try { data = e.data.json() } catch { data = { title: 'SubGuard', body: e.data.text() } }
-
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',
@@ -39,41 +69,26 @@ self.addEventListener('push', e => {
     requireInteraction: true,
     actions: data.actions || [],
   }
-
   e.waitUntil(self.registration.showNotification(data.title || 'SubGuard', options))
 })
-
-// ── Notification Action Clicks ──────────────────────────────────────────────
 
 self.addEventListener('notificationclick', e => {
   e.notification.close()
   const { action } = e
-  const { url, subId, renewalDate, stage } = e.notification.data || {}
-
-  // If user taps "Don't remind this cycle" on stage-1 notification
+  const { url, subId, renewalDate } = e.notification.data || {}
   if (action === 'dismiss-cycle' && subId && renewalDate) {
-    // Post message to all clients so the app can update localStorage
     e.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-        list.forEach(client => client.postMessage({
-          type: 'DISMISS_NOTIF_CYCLE',
-          subId,
-          renewalDate,
-        }))
-        // If no app open, open it to handle the dismiss
-        if (!list.length) return clients.openWindow(`/?dismiss=${subId}_${renewalDate}`)
+        list.forEach(client => client.postMessage({ type: 'DISMISS_NOTIF_CYCLE', subId, renewalDate }))
+        if (!list.length) return clients.openWindow('/?dismiss=' + subId + '_' + renewalDate)
       })
     )
     return
   }
-
-  // "Cancel subscription" — open cancellation center
   if (action === 'go-cancel') {
     e.waitUntil(clients.openWindow('/cancellation'))
     return
   }
-
-  // "Keep" or notification body tap — open home
   const target = url || '/'
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
