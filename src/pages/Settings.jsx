@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle, Zap, Crown } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
-import { KEYS, AVATAR_OPTIONS, defaultSettings } from '../utils/storage'
+import { useAuth } from '../contexts/AuthContext'
+import { AVATAR_OPTIONS, defaultSettings } from '../utils/storage'
 import { requestNotificationPermission, subscribeToPush, unsubscribeFromPush, getPushSubscriptionStatus } from '../utils/notifications'
 
 function Toggle({ value, onChange }) {
@@ -48,7 +50,9 @@ const CURRENCIES = [
 ]
 
 export default function Settings() {
-  const { settings, updateSettings, darkMode, setDarkMode } = useApp()
+  const { settings, updateSettings, darkMode, setDarkMode, activeKeys } = useApp()
+  const { user, isPremium, logout } = useAuth()
+  const navigate = useNavigate()
   const [notifStatus, setNotifStatus] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
   )
@@ -73,15 +77,9 @@ export default function Settings() {
 
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
 
-  function updateNotif(key, val) {
-    updateSettings({ notifications: { ...notifs, [key]: val } })
-  }
-  function updateDisplay(key, val) {
-    updateSettings({ display: { ...display, [key]: val } })
-  }
-  function updateProfile(key, val) {
-    updateSettings({ profile: { ...profile, [key]: val } })
-  }
+  function updateNotif(key, val) { updateSettings({ notifications: { ...notifs, [key]: val } }) }
+  function updateDisplay(key, val) { updateSettings({ display: { ...display, [key]: val } }) }
+  function updateProfile(key, val) { updateSettings({ profile: { ...profile, [key]: val } }) }
 
   async function handleRequestNotifications() {
     const result = await requestNotificationPermission()
@@ -116,10 +114,10 @@ export default function Settings() {
 
   function handleExport() {
     const data = {
-      subscriptions: JSON.parse(localStorage.getItem(KEYS.SUBSCRIPTIONS) || '[]'),
-      reminders: JSON.parse(localStorage.getItem(KEYS.REMINDERS) || '[]'),
-      household: JSON.parse(localStorage.getItem(KEYS.HOUSEHOLD) || '[]'),
-      settings: JSON.parse(localStorage.getItem(KEYS.SETTINGS) || '{}'),
+      subscriptions: JSON.parse(localStorage.getItem(activeKeys.SUBSCRIPTIONS) || '[]'),
+      reminders:     JSON.parse(localStorage.getItem(activeKeys.REMINDERS) || '[]'),
+      household:     JSON.parse(localStorage.getItem(activeKeys.HOUSEHOLD) || '[]'),
+      settings:      JSON.parse(localStorage.getItem(activeKeys.SETTINGS) || '{}'),
       exportedAt: new Date().toISOString(),
       version: '2.0',
     }
@@ -141,10 +139,10 @@ export default function Settings() {
     reader.onload = (ev) => {
       try {
         const data = JSON.parse(ev.target.result)
-        if (data.subscriptions) localStorage.setItem(KEYS.SUBSCRIPTIONS, JSON.stringify(data.subscriptions))
-        if (data.reminders) localStorage.setItem(KEYS.REMINDERS, JSON.stringify(data.reminders))
-        if (data.household) localStorage.setItem(KEYS.HOUSEHOLD, JSON.stringify(data.household))
-        if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings))
+        if (data.subscriptions) localStorage.setItem(activeKeys.SUBSCRIPTIONS, JSON.stringify(data.subscriptions))
+        if (data.reminders)     localStorage.setItem(activeKeys.REMINDERS,     JSON.stringify(data.reminders))
+        if (data.household)     localStorage.setItem(activeKeys.HOUSEHOLD,     JSON.stringify(data.household))
+        if (data.settings)      localStorage.setItem(activeKeys.SETTINGS,      JSON.stringify(data.settings))
         window.location.reload()
       } catch {
         setImportError('Invalid file format. Please use a SubGuard backup file.')
@@ -156,7 +154,7 @@ export default function Settings() {
   function handleClearData() {
     if (!window.confirm('This will delete ALL your SubGuard data permanently. Are you sure?')) return
     if (!window.confirm('This cannot be undone. Delete everything?')) return
-    Object.values(KEYS).forEach(k => localStorage.removeItem(k))
+    Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
 
@@ -164,31 +162,51 @@ export default function Settings() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-2">
         <SettingsIcon size={19} className="text-slate-400" />
         <h1 className="page-header mb-0">Settings</h1>
       </div>
 
-      {/* Profile */}
-      <Section icon={User} title="Profile">
+      <Section icon={User} title="Account & Plan">
+        <div className={`flex items-center justify-between p-3 rounded-xl mb-3 ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
+          <div className="flex items-center gap-3">
+            {user?.avatar
+              ? <img src={user.avatar} alt="" className="w-9 h-9 rounded-full object-cover" />
+              : <span className="text-2xl">{profile.avatar || '\u{1F464}'}</span>
+            }
+            <div>
+              <div className={`text-sm font-semibold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{user?.name || profile.name || 'My Account'}</div>
+              <div className="text-xs text-slate-500">{user?.email || ''}</div>
+            </div>
+          </div>
+          {isPremium ? (
+            <span className="flex items-center gap-1 text-xs font-bold bg-gradient-to-r from-amber-500 to-amber-400 text-white px-2.5 py-1 rounded-full">
+              <Crown size={11} /> PRO
+            </span>
+          ) : (
+            <span className="text-xs font-bold bg-slate-700 text-slate-400 px-2.5 py-1 rounded-full">FREE</span>
+          )}
+        </div>
+        {!isPremium && (
+          <button onClick={() => navigate('/upgrade')} className="btn-primary w-full justify-center text-sm mb-2">
+            <Zap size={14} /> Upgrade to Pro — $5 one-time
+          </button>
+        )}
+        <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20">
+          Sign Out of SubGuard
+        </button>
+      </Section>
+
+      <Section icon={User} title="Display Profile">
         <SettingRow label="Display Name" sub="Shown in the sidebar">
-          <input
-            className="input w-40 text-right text-sm py-1.5"
-            value={profile.name || ''}
-            onChange={e => updateProfile('name', e.target.value)}
-            placeholder="Your name"
-          />
+          <input className="input w-40 text-right text-sm py-1.5" value={profile.name || ''} onChange={e => updateProfile('name', e.target.value)} placeholder="Your name" />
         </SettingRow>
         <div className="py-3">
           <div className="text-sm font-medium text-slate-200 mb-3">Avatar</div>
           <div className="grid grid-cols-6 gap-2">
             {AVATAR_OPTIONS.map(av => (
-              <button
-                key={av}
-                onClick={() => updateProfile('avatar', av)}
-                className={`text-2xl p-2 rounded-xl transition-all ${profile.avatar === av ? 'bg-cyan-500/20 ring-2 ring-cyan-500/50' : 'hover:bg-slate-700/40'}`}
-              >
+              <button key={av} onClick={() => updateProfile('avatar', av)}
+                className={`text-2xl p-2 rounded-xl transition-all ${profile.avatar === av ? 'bg-cyan-500/20 ring-2 ring-cyan-500/50' : 'hover:bg-slate-700/40'}`}>
                 {av}
               </button>
             ))}
@@ -196,7 +214,6 @@ export default function Settings() {
         </div>
       </Section>
 
-      {/* Display */}
       <Section icon={Palette} title="Display">
         <SettingRow label="Dark Mode" sub="Dark navy background">
           <Toggle value={darkMode} onChange={setDarkMode} />
@@ -217,7 +234,6 @@ export default function Settings() {
         </SettingRow>
       </Section>
 
-      {/* Install App */}
       <Section icon={Smartphone} title="Install App">
         {isInstalled ? (
           <div className="flex items-center gap-2 text-sm text-emerald-400 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
@@ -244,9 +260,7 @@ export default function Settings() {
         )}
       </Section>
 
-      {/* Push Notifications */}
       <Section icon={Bell} title="Push Notifications">
-        {/* 3-stage explanation */}
         <div className="mb-4 p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 space-y-1.5">
           <div className="text-xs font-semibold text-cyan-400 mb-2">3-Stage Renewal Reminder System</div>
           <div className="flex items-start gap-2 text-xs text-slate-400">
@@ -263,7 +277,6 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Status & subscribe button */}
         <div className="mb-4 space-y-2">
           {notifStatus === 'unsupported' && (
             <div className="flex items-center gap-2 text-xs text-slate-500 p-3 bg-slate-800/40 border border-slate-700/40 rounded-lg">
@@ -272,22 +285,16 @@ export default function Settings() {
           )}
           {notifStatus === 'denied' && (
             <div className="flex items-center gap-2 text-xs text-red-300 p-3 bg-red-500/10 border border-red-500/25 rounded-lg">
-              <XCircle size={14} /> Notifications blocked — go to browser Settings → Site Settings → Notifications to re-enable
+              <XCircle size={14} /> Notifications blocked — go to browser Settings to re-enable
             </div>
           )}
           {notifStatus === 'granted' ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-emerald-400 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
                 <CheckCircle size={14} />
-                {pushSubscribed
-                  ? 'Background push notifications active — works even when app is closed'
-                  : 'Notifications allowed but not yet subscribed to background push'}
+                {pushSubscribed ? 'Background push notifications active' : 'Notifications allowed but not yet subscribed to background push'}
               </div>
-              <button
-                onClick={handleTogglePush}
-                disabled={pushLoading}
-                className={`btn-${pushSubscribed ? 'secondary' : 'primary'} w-full justify-center`}
-              >
+              <button onClick={handleTogglePush} disabled={pushLoading} className={`btn-${pushSubscribed ? 'secondary' : 'primary'} w-full justify-center`}>
                 <Bell size={14} />
                 {pushLoading ? 'Working...' : pushSubscribed ? 'Disable Background Push' : 'Enable Background Push (recommended)'}
               </button>
@@ -320,16 +327,12 @@ export default function Settings() {
             {REMINDER_DAY_OPTIONS.map(d => {
               const selected = (notifs.remindDaysBefore || [2, 7]).includes(d)
               return (
-                <button
-                  key={d}
-                  onClick={() => {
-                    const current = notifs.remindDaysBefore || [2, 7]
-                    const next = selected ? current.filter(x => x !== d) : [...current, d]
-                    updateNotif('remindDaysBefore', next)
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                    selected ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
-                  }`}
+                <button key={d} onClick={() => {
+                  const current = notifs.remindDaysBefore || [2, 7]
+                  const next = selected ? current.filter(x => x !== d) : [...current, d]
+                  updateNotif('remindDaysBefore', next)
+                }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${selected ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'}`}
                 >
                   {d === 1 ? '1 day' : `${d} days`}
                 </button>
@@ -350,12 +353,11 @@ export default function Settings() {
         </SettingRow>
       </Section>
 
-      {/* Data */}
       <Section icon={Database} title="Data Management">
         <div className="space-y-2">
           <button onClick={handleExport} className="btn-secondary w-full justify-center">
             <Download size={14} />
-            {exportSuccess ? 'Exported!' : 'Export Data as JSON'}
+            {exportSuccess ? 'Exported!' : 'Export My Data as JSON'}
           </button>
           <label className="btn-secondary w-full justify-center cursor-pointer">
             <Upload size={14} /> Import from JSON
@@ -363,12 +365,11 @@ export default function Settings() {
           </label>
           {importError && <p className="text-xs text-red-400 text-center">{importError}</p>}
           <button onClick={handleClearData} className="btn-danger w-full justify-center py-2.5 mt-3">
-            <Trash2 size={14} /> Clear All Data
+            <Trash2 size={14} /> Clear All My Data
           </button>
         </div>
       </Section>
 
-      {/* About */}
       <div className="card p-5 text-center space-y-2">
         <div className="flex items-center justify-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
@@ -377,8 +378,8 @@ export default function Settings() {
           <span className="font-bold text-slate-100">SubGuard</span>
         </div>
         <p className="text-xs text-slate-500">Stop getting charged for things you forgot about.</p>
-        <p className="text-xs text-slate-700">v2.0.0 · All data stored locally in your browser · No account required · Privacy first</p>
+        <p className="text-xs text-slate-700">v2.0.0 · Data stored per-account in your browser · Signed in with Google</p>
       </div>
     </div>
   )
-}
+    }
