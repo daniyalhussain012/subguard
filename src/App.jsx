@@ -1,12 +1,14 @@
-﻿import React, { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense } from 'react'
+import React, { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense, useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
-import { initData, KEYS, defaultSettings } from './utils/storage'
+import { buildSampleData, defaultSettings } from './utils/storage'
 import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1 } from './utils/notifications'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
+import AuthCallbackPage from './pages/AuthCallback'
+
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Subscriptions = lazy(() => import('./pages/Subscriptions'))
 const AddEditSubscription = lazy(() => import('./pages/AddEditSubscription'))
@@ -19,13 +21,17 @@ const CancellationCenter = lazy(() => import('./pages/CancellationCenter'))
 const PriceCompare = lazy(() => import('./pages/PriceCompare'))
 const Settings = lazy(() => import('./pages/Settings'))
 const SavingsVictoryBoard = lazy(() => import('./pages/SavingsVictoryBoard'))
+const Upgrade = lazy(() => import('./pages/Upgrade'))
+
 export const AppContext = createContext(null)
 export const useApp = () => useContext(AppContext)
+
 const pageVariants = {
   initial: { opacity: 0, x: 18 },
   animate: { opacity: 1, x: 0, transition: { duration: 0.22, ease: 'easeOut' } },
   exit: { opacity: 0, x: -18, transition: { duration: 0.15 } },
 }
+
 function PageLoader() {
   return (
     <div className="flex items-center justify-center py-20">
@@ -33,33 +39,24 @@ function PageLoader() {
     </div>
   )
 }
-function AuthCallback() {
-  const { handleAuthCallback } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const token = params.get('token')
-    if (token) { handleAuthCallback(token); navigate('/', { replace: true }) }
-    else navigate('/login?error=no_token', { replace: true })
-  }, [])
-  return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" /></div>
-}
+
 function AuthGate({ children }) {
-  const { isAuthenticated, loading } = useAuth()
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" /></div>
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+  if (!isAuthenticated) return <Navigate to="/login" state={{ from: location }} replace />
   return children
 }
+
 function PublicRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth()
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600" /></div>
+  const { isAuthenticated } = useAuth()
   if (isAuthenticated) return <Navigate to="/" replace />
   return children
 }
+
 function AnimatedRoutes() {
   const location = useLocation()
   const navigate = useNavigate()
+
   useEffect(() => {
     const handler = (e) => {
       const mod = e.ctrlKey || e.metaKey
@@ -74,13 +71,14 @@ function AnimatedRoutes() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [navigate])
+
   return (
     <AnimatePresence mode="wait">
       <motion.div key={location.pathname} variants={pageVariants} initial="initial" animate="animate" exit="exit" style={{ minHeight: '100%' }}>
         <Suspense fallback={<PageLoader />}>
           <Routes location={location}>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
               <Route path="subscriptions" element={<Subscriptions />} />
@@ -95,8 +93,10 @@ function AnimatedRoutes() {
               <Route path="price-compare" element={<PriceCompare />} />
               <Route path="victory" element={<SavingsVictoryBoard />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="upgrade" element={<Upgrade />} />
               <Route path="report" element={<Navigate to="/leaks" replace />} />
               <Route path="smart-add" element={<Navigate to="/scanner" replace />} />
+              <Route path="dashboard" element={<Navigate to="/" replace />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -105,7 +105,26 @@ function AnimatedRoutes() {
     </AnimatePresence>
   )
 }
-export default function App() {
+
+function AppInner() {
+  const { user, isPremium, refreshUser } = useAuth()
+  const userId = user?.id || null
+
+  const activeKeys = useMemo(() => {
+    const p = userId ? `subguard_${userId}` : 'subguard'
+    return {
+      SUBSCRIPTIONS: `${p}_subscriptions`,
+      REMINDERS:     `${p}_reminders`,
+      SETTINGS:      `${p}_settings`,
+      FIRST_VISIT:   `${p}_first_visit`,
+      HOUSEHOLD:     `${p}_household`,
+      SCAN_HISTORY:  `${p}_scan_history`,
+      ALERTS_DISMISSED: `${p}_alerts_dismissed`,
+      CANCELLATIONS: `${p}_cancellations`,
+      ONBOARDING:    `${p}_onboarding_done`,
+    }
+  }, [userId])
+
   const [settings, setSettings] = useState(defaultSettings())
   const [subscriptions, setSubscriptions] = useState([])
   const [reminders, setReminders] = useState([])
@@ -114,11 +133,50 @@ export default function App() {
   const [dismissedAlerts, setDismissedAlerts] = useState([])
   const [cancellations, setCancellations] = useState([])
   const [showOnboarding, setShowOnboarding] = useState(false)
+
   useEffect(() => {
-    initData()
-    loadAll()
+    if (userId && !localStorage.getItem(activeKeys.FIRST_VISIT)) {
+      const oldSubs = localStorage.getItem('subguard_subscriptions')
+      if (oldSubs) {
+        const map = {
+          'subguard_subscriptions':     activeKeys.SUBSCRIPTIONS,
+          'subguard_reminders':         activeKeys.REMINDERS,
+          'subguard_settings':          activeKeys.SETTINGS,
+          'subguard_household':         activeKeys.HOUSEHOLD,
+          'subguard_scan_history':      activeKeys.SCAN_HISTORY,
+          'subguard_alerts_dismissed':  activeKeys.ALERTS_DISMISSED,
+          'subguard_cancellations':     activeKeys.CANCELLATIONS,
+        }
+        Object.entries(map).forEach(([oldKey, newKey]) => {
+          const v = localStorage.getItem(oldKey)
+          if (v) localStorage.setItem(newKey, v)
+        })
+        localStorage.setItem(activeKeys.FIRST_VISIT, 'migrated')
+      }
+    }
+
+    if (!localStorage.getItem(activeKeys.FIRST_VISIT)) {
+      const { subscriptions: subs, members } = buildSampleData()
+      localStorage.setItem(activeKeys.SUBSCRIPTIONS, JSON.stringify(subs))
+      localStorage.setItem(activeKeys.HOUSEHOLD,     JSON.stringify(members))
+      localStorage.setItem(activeKeys.REMINDERS,     JSON.stringify([]))
+      localStorage.setItem(activeKeys.SCAN_HISTORY,  JSON.stringify([]))
+      localStorage.setItem(activeKeys.ALERTS_DISMISSED, JSON.stringify([]))
+      localStorage.setItem(activeKeys.CANCELLATIONS, JSON.stringify([]))
+      localStorage.setItem(activeKeys.SETTINGS,      JSON.stringify(defaultSettings()))
+      localStorage.setItem(activeKeys.FIRST_VISIT,   'done')
+    }
+
+    loadAll(activeKeys)
     registerServiceWorker()
-    if (!localStorage.getItem('subguard_onboarding_done')) setShowOnboarding(true)
+    if (!localStorage.getItem(activeKeys.ONBOARDING)) setShowOnboarding(true)
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upgraded') === 'true') {
+      refreshUser()
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+
     const handleSWMessage = (event) => {
       if (event.data?.type === 'DISMISS_NOTIF_CYCLE') {
         const { subId, renewalDate } = event.data
@@ -126,7 +184,7 @@ export default function App() {
       }
     }
     navigator.serviceWorker?.addEventListener('message', handleSWMessage)
-    const params = new URLSearchParams(window.location.search)
+
     const dismissKey = params.get('dismiss')
     if (dismissKey) {
       const [subId, ...rest] = dismissKey.split('_')
@@ -134,16 +192,20 @@ export default function App() {
       if (subId && renewalDate) dismissNotifStage1(subId, renewalDate)
       window.history.replaceState({}, '', window.location.pathname)
     }
+
     return () => navigator.serviceWorker?.removeEventListener('message', handleSWMessage)
-  }, [])
+  }, [activeKeys])
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.darkMode)
     document.title = getNotificationTitle()
-    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings))
-  }, [settings, subscriptions])
+    localStorage.setItem(activeKeys.SETTINGS, JSON.stringify(settings))
+  }, [settings, subscriptions, activeKeys])
+
   useEffect(() => {
     if (subscriptions.length) checkAndSendNotifications(subscriptions, settings)
   }, [subscriptions])
+
   function getNotificationTitle() {
     const urgent = subscriptions.filter(s => {
       if (s.status !== 'Active') return false
@@ -152,43 +214,58 @@ export default function App() {
     }).length
     return urgent > 0 ? `SubGuard (${urgent})` : 'SubGuard'
   }
+
   function handleOnboardingClose() {
-    localStorage.setItem('subguard_onboarding_done', '1')
+    localStorage.setItem(activeKeys.ONBOARDING, '1')
     setShowOnboarding(false)
   }
-  function loadAll() {
-    setSubscriptions(JSON.parse(localStorage.getItem(KEYS.SUBSCRIPTIONS) || '[]'))
-    setReminders(JSON.parse(localStorage.getItem(KEYS.REMINDERS) || '[]'))
-    setHousehold(JSON.parse(localStorage.getItem(KEYS.HOUSEHOLD) || '[]'))
-    setScanHistory(JSON.parse(localStorage.getItem(KEYS.SCAN_HISTORY) || '[]'))
-    setDismissedAlerts(JSON.parse(localStorage.getItem(KEYS.ALERTS_DISMISSED) || '[]'))
-    setCancellations(JSON.parse(localStorage.getItem(KEYS.CANCELLATIONS) || '[]'))
-    const storedSettings = JSON.parse(localStorage.getItem(KEYS.SETTINGS) || 'null')
-    if (storedSettings) setSettings(s => ({ ...defaultSettings(), ...storedSettings, notifications: { ...defaultSettings().notifications, ...storedSettings.notifications }, display: { ...defaultSettings().display, ...storedSettings.display } }))
+
+  function loadAll(keys) {
+    setSubscriptions(JSON.parse(localStorage.getItem(keys.SUBSCRIPTIONS) || '[]'))
+    setReminders(JSON.parse(localStorage.getItem(keys.REMINDERS) || '[]'))
+    setHousehold(JSON.parse(localStorage.getItem(keys.HOUSEHOLD) || '[]'))
+    setScanHistory(JSON.parse(localStorage.getItem(keys.SCAN_HISTORY) || '[]'))
+    setDismissedAlerts(JSON.parse(localStorage.getItem(keys.ALERTS_DISMISSED) || '[]'))
+    setCancellations(JSON.parse(localStorage.getItem(keys.CANCELLATIONS) || '[]'))
+    const storedSettings = JSON.parse(localStorage.getItem(keys.SETTINGS) || 'null')
+    if (storedSettings) setSettings(s => ({
+      ...defaultSettings(), ...storedSettings,
+      notifications: { ...defaultSettings().notifications, ...storedSettings.notifications },
+      display: { ...defaultSettings().display, ...storedSettings.display },
+    }))
   }
+
   const save = useCallback((key, data, setter) => {
     localStorage.setItem(key, JSON.stringify(data))
     setter(data)
   }, [])
+
   function updateSettings(updates) {
     setSettings(s => {
       const next = { ...s, ...updates }
-      localStorage.setItem(KEYS.SETTINGS, JSON.stringify(next))
+      localStorage.setItem(activeKeys.SETTINGS, JSON.stringify(next))
       return next
     })
   }
-  const addSubscription = useCallback((sub) => { const next = [...subscriptions, sub]; save(KEYS.SUBSCRIPTIONS, next, setSubscriptions) }, [subscriptions, save])
-  const updateSubscription = useCallback((id, updates) => { const next = subscriptions.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s); save(KEYS.SUBSCRIPTIONS, next, setSubscriptions) }, [subscriptions, save])
-  const deleteSubscription = useCallback((id) => { save(KEYS.SUBSCRIPTIONS, subscriptions.filter(s => s.id !== id), setSubscriptions) }, [subscriptions, save])
-  const addReminder = useCallback((r) => save(KEYS.REMINDERS, [...reminders, r], setReminders), [reminders, save])
-  const deleteReminder = useCallback((id) => save(KEYS.REMINDERS, reminders.filter(r => r.id !== id), setReminders), [reminders, save])
-  const addMember = useCallback((m) => save(KEYS.HOUSEHOLD, [...household, m], setHousehold), [household, save])
-  const updateMember = useCallback((id, u) => save(KEYS.HOUSEHOLD, household.map(m => m.id === id ? { ...m, ...u } : m), setHousehold), [household, save])
-  const deleteMember = useCallback((id) => save(KEYS.HOUSEHOLD, household.filter(m => m.id !== id), setHousehold), [household, save])
-  const addScanHistory = useCallback((entry) => { const next = [entry, ...scanHistory].slice(0, 50); save(KEYS.SCAN_HISTORY, next, setScanHistory) }, [scanHistory, save])
-  const dismissAlert = useCallback((alertId) => { const next = [...dismissedAlerts, alertId]; save(KEYS.ALERTS_DISMISSED, next, setDismissedAlerts) }, [dismissedAlerts, save])
-  const addCancellation = useCallback((c) => save(KEYS.CANCELLATIONS, [...cancellations, c], setCancellations), [cancellations, save])
-  const updateCancellation = useCallback((id, u) => save(KEYS.CANCELLATIONS, cancellations.map(c => c.id === id ? { ...c, ...u } : c), setCancellations), [cancellations, save])
+
+  const addSubscription    = useCallback((sub) => save(activeKeys.SUBSCRIPTIONS, [...subscriptions, sub], setSubscriptions), [subscriptions, save, activeKeys])
+  const updateSubscription = useCallback((id, u) => save(activeKeys.SUBSCRIPTIONS, subscriptions.map(s => s.id === id ? { ...s, ...u, updatedAt: new Date().toISOString() } : s), setSubscriptions), [subscriptions, save, activeKeys])
+  const deleteSubscription = useCallback((id)    => save(activeKeys.SUBSCRIPTIONS, subscriptions.filter(s => s.id !== id), setSubscriptions), [subscriptions, save, activeKeys])
+
+  const addReminder    = useCallback((r)    => save(activeKeys.REMINDERS, [...reminders, r], setReminders), [reminders, save, activeKeys])
+  const deleteReminder = useCallback((id)   => save(activeKeys.REMINDERS, reminders.filter(r => r.id !== id), setReminders), [reminders, save, activeKeys])
+
+  const addMember    = useCallback((m)    => save(activeKeys.HOUSEHOLD, [...household, m], setHousehold), [household, save, activeKeys])
+  const updateMember = useCallback((id, u) => save(activeKeys.HOUSEHOLD, household.map(m => m.id === id ? { ...m, ...u } : m), setHousehold), [household, save, activeKeys])
+  const deleteMember = useCallback((id)   => save(activeKeys.HOUSEHOLD, household.filter(m => m.id !== id), setHousehold), [household, save, activeKeys])
+
+  const addScanHistory = useCallback((entry) => save(activeKeys.SCAN_HISTORY, [entry, ...scanHistory].slice(0, 50), setScanHistory), [scanHistory, save, activeKeys])
+
+  const dismissAlert = useCallback((alertId) => save(activeKeys.ALERTS_DISMISSED, [...dismissedAlerts, alertId], setDismissedAlerts), [dismissedAlerts, save, activeKeys])
+
+  const addCancellation    = useCallback((c)    => save(activeKeys.CANCELLATIONS, [...cancellations, c], setCancellations), [cancellations, save, activeKeys])
+  const updateCancellation = useCallback((id, u) => save(activeKeys.CANCELLATIONS, cancellations.map(c => c.id === id ? { ...c, ...u } : c), setCancellations), [cancellations, save, activeKeys])
+
   const ctx = {
     settings, updateSettings,
     subscriptions, addSubscription, updateSubscription, deleteSubscription,
@@ -197,20 +274,29 @@ export default function App() {
     scanHistory, addScanHistory,
     dismissedAlerts, dismissAlert,
     cancellations, addCancellation, updateCancellation,
-    reloadData: loadAll,
+    reloadData: () => loadAll(activeKeys),
     darkMode: settings.darkMode,
     setDarkMode: (v) => updateSettings({ darkMode: v }),
+    activeKeys,
+    isPremium,
   }
+
   return (
-    <AuthProvider>
-      <AppContext.Provider value={ctx}>
-        <BrowserRouter>
-          <div className={`min-h-screen transition-colors duration-300 ${settings.darkMode ? 'dark bg-slate-950' : 'bg-slate-100'}`}>
-            <AnimatedRoutes />
-            {showOnboarding && <OnboardingModal onClose={handleOnboardingClose} />}
-          </div>
-        </BrowserRouter>
-      </AppContext.Provider>
-    </AuthProvider>
+    <AppContext.Provider value={ctx}>
+      <div className={`min-h-screen transition-colors duration-300 ${settings.darkMode ? 'dark bg-slate-950' : 'bg-slate-100'}`}>
+        <AnimatedRoutes />
+        {showOnboarding && <OnboardingModal onClose={handleOnboardingClose} />}
+      </div>
+    </AppContext.Provider>
   )
 }
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AppInner />
+      </BrowserRouter>
+    </AuthProvider>
+  )
+    }
