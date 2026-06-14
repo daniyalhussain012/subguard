@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { AnimatePresence, motion } from 'framer-motion'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
-import { buildSampleData, defaultSettings } from './utils/storage'
+import { defaultSettings } from './utils/storage'
 import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1 } from './utils/notifications'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
@@ -110,6 +110,7 @@ function AppInner() {
   const { user, isPremium, refreshUser } = useAuth()
   const userId = user?.id || null
 
+  // Per-user localStorage keys — switching users auto-isolates data
   const activeKeys = useMemo(() => {
     const p = userId ? `subguard_${userId}` : 'subguard'
     return {
@@ -135,42 +136,23 @@ function AppInner() {
   const [showOnboarding, setShowOnboarding] = useState(false)
 
   useEffect(() => {
-    if (userId && !localStorage.getItem(activeKeys.FIRST_VISIT)) {
-      const oldSubs = localStorage.getItem('subguard_subscriptions')
-      if (oldSubs) {
-        const map = {
-          'subguard_subscriptions':     activeKeys.SUBSCRIPTIONS,
-          'subguard_reminders':         activeKeys.REMINDERS,
-          'subguard_settings':          activeKeys.SETTINGS,
-          'subguard_household':         activeKeys.HOUSEHOLD,
-          'subguard_scan_history':      activeKeys.SCAN_HISTORY,
-          'subguard_alerts_dismissed':  activeKeys.ALERTS_DISMISSED,
-          'subguard_cancellations':     activeKeys.CANCELLATIONS,
-        }
-        Object.entries(map).forEach(([oldKey, newKey]) => {
-          const v = localStorage.getItem(oldKey)
-          if (v) localStorage.setItem(newKey, v)
-        })
-        localStorage.setItem(activeKeys.FIRST_VISIT, 'migrated')
-      }
-    }
-
+    // First visit: initialize empty state for this user (no sample data — keeps accounts isolated)
     if (!localStorage.getItem(activeKeys.FIRST_VISIT)) {
-      const { subscriptions: subs, members } = buildSampleData()
-      localStorage.setItem(activeKeys.SUBSCRIPTIONS, JSON.stringify(subs))
-      localStorage.setItem(activeKeys.HOUSEHOLD,     JSON.stringify(members))
-      localStorage.setItem(activeKeys.REMINDERS,     JSON.stringify([]))
-      localStorage.setItem(activeKeys.SCAN_HISTORY,  JSON.stringify([]))
+      localStorage.setItem(activeKeys.SUBSCRIPTIONS,    JSON.stringify([]))
+      localStorage.setItem(activeKeys.HOUSEHOLD,        JSON.stringify([]))
+      localStorage.setItem(activeKeys.REMINDERS,        JSON.stringify([]))
+      localStorage.setItem(activeKeys.SCAN_HISTORY,     JSON.stringify([]))
       localStorage.setItem(activeKeys.ALERTS_DISMISSED, JSON.stringify([]))
-      localStorage.setItem(activeKeys.CANCELLATIONS, JSON.stringify([]))
-      localStorage.setItem(activeKeys.SETTINGS,      JSON.stringify(defaultSettings()))
-      localStorage.setItem(activeKeys.FIRST_VISIT,   'done')
+      localStorage.setItem(activeKeys.CANCELLATIONS,    JSON.stringify([]))
+      localStorage.setItem(activeKeys.SETTINGS,         JSON.stringify(defaultSettings()))
+      localStorage.setItem(activeKeys.FIRST_VISIT,      'done')
     }
 
     loadAll(activeKeys)
     registerServiceWorker()
     if (!localStorage.getItem(activeKeys.ONBOARDING)) setShowOnboarding(true)
 
+    // Handle Stripe success redirect
     const params = new URLSearchParams(window.location.search)
     if (params.get('upgraded') === 'true') {
       refreshUser()
@@ -194,7 +176,7 @@ function AppInner() {
     }
 
     return () => navigator.serviceWorker?.removeEventListener('message', handleSWMessage)
-  }, [activeKeys])
+  }, [activeKeys]) // Re-runs when user changes (login/logout)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.darkMode)
@@ -277,8 +259,8 @@ function AppInner() {
     reloadData: () => loadAll(activeKeys),
     darkMode: settings.darkMode,
     setDarkMode: (v) => updateSettings({ darkMode: v }),
-    activeKeys,
-    isPremium,
+    activeKeys,  // exposed for Settings export/import/clear
+    isPremium,   // exposed for plan gating
   }
 
   return (
@@ -299,4 +281,4 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   )
-    }
+}
