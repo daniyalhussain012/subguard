@@ -128,7 +128,18 @@ export default function Dashboard() {
   const paused = useMemo(() => subscriptions.filter(s => s.status === 'Paused'), [subscriptions])
   const cancelled = useMemo(() => subscriptions.filter(s => s.status === 'Cancelled'), [subscriptions])
 
-  const totalMonthly = useMemo(() => active.reduce((s, sub) => s + getMonthlyAmount(sub), 0), [active])
+  const currencyTotals = useMemo(() => {
+    const map = {}
+    active.forEach(sub => {
+      const cur = sub.currency || 'USD'
+      if (!map[cur]) map[cur] = 0
+      map[cur] += getMonthlyAmount(sub)
+    })
+    return Object.entries(map).map(([currency, monthly]) => ({ currency, monthly: parseFloat(monthly.toFixed(2)) }))
+      .sort((a, b) => b.monthly - a.monthly)
+  }, [active])
+
+  const totalMonthly = useMemo(() => currencyTotals.reduce((s, c) => s + c.monthly, 0), [currencyTotals])
   const savedMonthly = useMemo(() => [...paused, ...cancelled].reduce((s, sub) => s + getMonthlyAmount(sub), 0), [paused, cancelled])
   const atRiskWeekly = useMemo(() =>
     active.filter(s => s.importance === 'Can Live Without' && getDaysUntil(s.nextBillingDate) <= 7 && getDaysUntil(s.nextBillingDate) >= 0)
@@ -194,7 +205,9 @@ export default function Dashboard() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={TrendingDown} label="Monthly Burn" value={
-          <CountUp target={totalMonthly} prefix="$" decimals={2} duration={1000} />
+          currencyTotals.length <= 1
+            ? <CountUp target={currencyTotals[0]?.monthly ?? 0} prefix={currencyTotals[0]?.currency === 'USD' || !currencyTotals[0] ? '$' : ''} suffix={currencyTotals[0] && currencyTotals[0].currency !== 'USD' ? ` ${currencyTotals[0].currency}` : ''} decimals={2} duration={1000} />
+            : <span className="text-sm leading-tight">{currencyTotals.map(c => formatCurrency(c.monthly, c.currency)).join(' + ')}</span>
         } sub={`${active.length} active charges`} color="cyan" index={0} onClick={() => navigate('/leaks')} />
         <StatCard icon={CheckCircle} label="Saved This Month" value={
           <CountUp target={savedMonthly} prefix="$" decimals={2} duration={1000} />

@@ -101,10 +101,9 @@ const SAMPLE_EMAILS = [
 
 function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, scanning }) {
   const isGmail = provider === 'gmail'
-  const color = isGmail ? 'red' : 'blue'
   const label = isGmail ? 'Gmail' : 'Outlook / Hotmail'
   const icon = isGmail ? '📧' : '📨'
-  const connectUrl = `${API}/auth/${isGmail ? 'google' : 'microsoft'}`
+  const [showSetup, setShowSetup] = useState(false)
 
   if (!status.configured) {
     return (
@@ -113,16 +112,51 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
           <span className="text-xl">{icon}</span>
           <h3 className="font-semibold text-slate-300">{label}</h3>
         </div>
-        <div className="card bg-amber-500/10 border-amber-500/25 p-3">
-          <p className="text-xs text-amber-300 font-semibold mb-1">Setup Required</p>
+        <div className="card bg-amber-500/10 border-amber-500/25 p-3 space-y-2">
+          <p className="text-xs text-amber-300 font-semibold">Setup Required</p>
           <p className="text-xs text-amber-400/80">
-            {label} scanning requires a one-time setup (free, ~15 min). See{' '}
-            <a href="#" className="underline">SETUP_EMAIL.md</a> for instructions.
+            {label} scanning requires adding API credentials to the server (one-time, free).
           </p>
+          <button
+            onClick={() => setShowSetup(v => !v)}
+            className="flex items-center gap-1 text-xs text-amber-300 underline"
+          >
+            <Info size={11} /> {showSetup ? 'Hide' : 'Show'} setup instructions
+          </button>
+          {showSetup && (
+            <div className="text-xs text-slate-400 space-y-2 pt-1 border-t border-amber-500/20">
+              {isGmail ? (
+                <>
+                  <p className="font-semibold text-slate-300">Gmail Setup (~10 min)</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Go to <span className="text-cyan-400">console.cloud.google.com</span></li>
+                    <li>Create a project → Enable <strong>Gmail API</strong></li>
+                    <li>OAuth consent screen → add your Google account as a test user</li>
+                    <li>Create OAuth 2.0 credentials (Web application)</li>
+                    <li>Add redirect URI: <code className="bg-slate-800 px-1 rounded">YOUR_SERVER_URL/auth/google/callback</code></li>
+                    <li>Copy Client ID &amp; Secret → add to Render env vars:<br />
+                      <code className="bg-slate-800 px-1 rounded block mt-1">GOOGLE_CLIENT_ID=...<br />GOOGLE_CLIENT_SECRET=...<br />GMAIL_REDIRECT_URI=YOUR_SERVER_URL/auth/google/callback</code>
+                    </li>
+                  </ol>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-slate-300">Outlook Setup (~15 min)</p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Go to <span className="text-cyan-400">portal.azure.com</span> → App registrations</li>
+                    <li>New registration → Supported account types: <strong>Personal Microsoft accounts only</strong></li>
+                    <li>Add redirect URI (Web): <code className="bg-slate-800 px-1 rounded">YOUR_SERVER_URL/auth/microsoft/callback</code></li>
+                    <li>Certificates &amp; secrets → New client secret → copy the value</li>
+                    <li>API permissions → Add: <strong>Mail.Read</strong> (delegated)</li>
+                    <li>Add to Render env vars:<br />
+                      <code className="bg-slate-800 px-1 rounded block mt-1">MICROSOFT_CLIENT_ID=...<br />MICROSOFT_CLIENT_SECRET=...<br />OUTLOOK_REDIRECT_URI=YOUR_SERVER_URL/auth/microsoft/callback</code>
+                    </li>
+                  </ol>
+                </>
+              )}
+            </div>
+          )}
         </div>
-        <p className="text-xs text-slate-500">
-          Or run <code className="bg-slate-800 px-1 rounded">npm run dev:all</code> to start the email server.
-        </p>
       </div>
     )
   }
@@ -164,6 +198,12 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
       <a href={connectUrl} className="btn-primary w-full justify-center">
         <ExternalLink size={14} /> Connect {label}
       </a>
+      {isGmail && (
+        <div className="card bg-slate-800/50 border-slate-700/40 p-3 text-xs text-slate-500 space-y-1">
+          <p className="text-slate-400 font-semibold flex items-center gap-1"><Info size={11} /> "App not verified" warning?</p>
+          <p>This is normal for apps pending Google review. Click <strong className="text-slate-300">Advanced</strong> → <strong className="text-slate-300">"Go to app (unsafe)"</strong> to continue. Your emails are never stored.</p>
+        </div>
+      )}
       <p className="text-xs text-slate-600 text-center">Read-only · No emails stored · Disconnect anytime</p>
     </div>
   )
@@ -430,7 +470,7 @@ export default function SmartScanner() {
               <p className="text-xs text-slate-500">
                 Run <code className="bg-slate-800 px-1.5 py-0.5 rounded text-cyan-400">npm run dev:all</code> to start both the app and email backend, then refresh.
               </p>
-              <p className="text-xs text-slate-600">Or see <strong>SETUP_EMAIL.md</strong> for full setup instructions.</p>
+              <p className="text-xs text-slate-600">Expand the Setup Required section on each provider card for step-by-step instructions.</p>
             </div>
           ) : (
             <EmailConnectCard

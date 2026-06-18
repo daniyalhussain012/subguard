@@ -1,7 +1,7 @@
 {
-  "name": "SubGuard",
-  "short_name": "SubGuard",
-  "description": "Stop getting charged for things you forgot about",
+  "name": "RenewBell",
+  "short_name": "RenewBell",
+  "description": "Subscription Tracker & Reminders — Never miss a renewal again.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0F172A",

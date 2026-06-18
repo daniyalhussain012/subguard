@@ -5,7 +5,7 @@ import {
   ShieldCheck, LayoutDashboard, Radar, Mail, Users2, TrendingDown,
   XCircle, Trophy, Settings, Plus, Sun, Moon, X, Bell,
   CreditCard, Calendar, DollarSign, MoreHorizontal, Home,
-  LogOut, Zap, Crown
+  LogOut, Zap, Crown, Lock
 } from 'lucide-react'
 import { useApp } from '../App'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,15 +14,15 @@ import { getNotificationBadgeCount } from '../utils/notifications'
 const PRIMARY_NAV = [
   { to: '/', label: 'Command Center', icon: LayoutDashboard, end: true },
   { to: '/radar', label: 'Renewal Radar', icon: Radar },
-  { to: '/scanner', label: 'Smart Scanner', icon: Mail },
-  { to: '/household', label: 'Household Hub', icon: Users2 },
-  { to: '/leaks', label: 'Money Leaks', icon: TrendingDown },
-  { to: '/cancellation', label: 'Cancellation Center', icon: XCircle },
+  { to: '/scanner', label: 'Smart Scanner', icon: Mail, premium: true },
+  { to: '/household', label: 'Household Hub', icon: Users2, premium: true },
+  { to: '/leaks', label: 'Money Leaks', icon: TrendingDown, premium: true },
+  { to: '/cancellation', label: 'Cancellation Center', icon: XCircle, premium: true },
 ]
 
 const SECONDARY_NAV = [
-  { to: '/price-compare', label: 'Price Compare', icon: DollarSign },
-  { to: '/victory', label: 'Savings Victory', icon: Trophy },
+  { to: '/price-compare', label: 'Price Compare', icon: DollarSign, premium: true },
+  { to: '/victory', label: 'Savings Victory', icon: Trophy, premium: true },
   { to: '/subscriptions', label: 'All Subscriptions', icon: CreditCard },
   { to: '/calendar', label: 'Calendar', icon: Calendar },
   { to: '/settings', label: 'Settings', icon: Settings },
@@ -41,7 +41,7 @@ const MORE_ITEMS = [
 
 const FREE_SUB_LIMIT = 5
 
-function NavItemEl({ to, label, icon: Icon, end, onClick, badge }) {
+function NavItemEl({ to, label, icon: Icon, end, onClick, badge, premium, isPremium }) {
   return (
     <NavLink
       to={to}
@@ -54,6 +54,7 @@ function NavItemEl({ to, label, icon: Icon, end, onClick, badge }) {
       {badge > 0 && (
         <span className="w-5 h-5 bg-red-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center">{badge}</span>
       )}
+      {premium && !isPremium && <Lock size={11} className="text-slate-600 shrink-0" />}
     </NavLink>
   )
 }
@@ -85,8 +86,8 @@ export default function Layout() {
             <ShieldCheck size={17} className="text-white" />
           </div>
           <div>
-            <div className={`font-bold text-sm leading-none ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>SubGuard</div>
-            <div className="text-[10px] text-slate-500 leading-tight mt-0.5">Stop getting charged for things<br/>you forgot about.</div>
+            <div className={`font-bold text-sm leading-none ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>RenewBell</div>
+            <div className="text-[10px] text-slate-500 leading-tight mt-0.5">Subscription Tracker &amp; Reminders</div>
           </div>
         </div>
       </div>
@@ -94,11 +95,11 @@ export default function Layout() {
       <nav className="flex-1 p-2.5 space-y-0.5 overflow-y-auto">
         <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-2 mb-2 mt-1">Main</div>
         {PRIMARY_NAV.map(item => (
-          <NavItemEl key={item.to} {...item} onClick={onClose} badge={item.to === '/' ? badgeCount : 0} />
+          <NavItemEl key={item.to} {...item} onClick={onClose} badge={item.to === '/' ? badgeCount : 0} isPremium={isPremium} />
         ))}
         <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest px-2 mb-2 mt-4">More</div>
         {SECONDARY_NAV.map(item => (
-          <NavItemEl key={item.to} {...item} onClick={onClose} />
+          <NavItemEl key={item.to} {...item} onClick={onClose} isPremium={isPremium} />
         ))}
         {!isPremium && (
           <NavLink to="/upgrade" onClick={onClose}
@@ -158,7 +159,7 @@ export default function Layout() {
             <div className="w-7 h-7 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
               <ShieldCheck size={14} className="text-white" />
             </div>
-            <span className={`font-bold text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>SubGuard</span>
+            <span className={`font-bold text-base ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>RenewBell</span>
           </div>
           <div className="flex items-center gap-3">
             {badgeCount > 0 && (

@@ -53,6 +53,12 @@ function PublicRoute({ children }) {
   return children
 }
 
+function PremiumGate({ children }) {
+  const { isPremium } = useAuth()
+  if (!isPremium) return <Navigate to="/upgrade" replace />
+  return children
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -86,12 +92,12 @@ function AnimatedRoutes() {
               <Route path="edit/:id" element={<AddEditSubscription />} />
               <Route path="calendar" element={<CalendarView />} />
               <Route path="radar" element={<RenewalRadar />} />
-              <Route path="scanner" element={<SmartScanner />} />
-              <Route path="household" element={<HouseholdHub />} />
-              <Route path="leaks" element={<MoneyLeaksDetective />} />
-              <Route path="cancellation" element={<CancellationCenter />} />
-              <Route path="price-compare" element={<PriceCompare />} />
-              <Route path="victory" element={<SavingsVictoryBoard />} />
+              <Route path="scanner" element={<PremiumGate feature="Smart Scanner"><SmartScanner /></PremiumGate>} />
+              <Route path="household" element={<PremiumGate feature="Household Hub"><HouseholdHub /></PremiumGate>} />
+              <Route path="leaks" element={<PremiumGate feature="Money Leaks Detective"><MoneyLeaksDetective /></PremiumGate>} />
+              <Route path="cancellation" element={<PremiumGate feature="Cancellation Center"><CancellationCenter /></PremiumGate>} />
+              <Route path="price-compare" element={<PremiumGate feature="Price Compare"><PriceCompare /></PremiumGate>} />
+              <Route path="victory" element={<PremiumGate feature="Savings Victory Board"><SavingsVictoryBoard /></PremiumGate>} />
               <Route path="settings" element={<Settings />} />
               <Route path="upgrade" element={<Upgrade />} />
               <Route path="report" element={<Navigate to="/leaks" replace />} />
@@ -194,7 +200,7 @@ function AppInner() {
       const d = (new Date(s.nextBillingDate) - new Date()) / 86400000
       return d >= 0 && d <= 3
     }).length
-    return urgent > 0 ? `SubGuard (${urgent})` : 'SubGuard'
+    return urgent > 0 ? `RenewBell (${urgent})` : 'RenewBell'
   }
 
   function handleOnboardingClose() {

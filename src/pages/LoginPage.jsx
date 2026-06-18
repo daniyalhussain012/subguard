@@ -47,8 +47,9 @@ export default function LoginPage() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-100">SubGuard</h1>
-          <p className="text-slate-400 text-sm mt-1">Stop getting charged for things you forgot about</p>
+          <h1 className="text-2xl font-bold text-slate-100">RenewBell</h1>
+          <p className="text-slate-300 text-sm mt-0.5 font-medium">Subscription Tracker &amp; Reminders</p>
+          <p className="text-slate-500 text-xs mt-1">Never miss a renewal again.</p>
         </div>
 
         {/* Card */}
