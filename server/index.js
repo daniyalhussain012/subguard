@@ -11,7 +11,7 @@ const outlook = require('./outlook');
 const app = express();
 connectDB();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://subguard-five.vercel.app';
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.app').replace(/\/$/, '');
 
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 
