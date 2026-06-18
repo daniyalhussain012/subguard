@@ -9,16 +9,25 @@ const SCOPES = 'https://graph.microsoft.com/Mail.Read https://graph.microsoft.co
 let outlookTokens = null
 let outlookUserEmail = null
 
+function getRedirectUri() {
+  if (process.env.OUTLOOK_REDIRECT_URI) return process.env.OUTLOOK_REDIRECT_URI
+  const base = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3001}`
+  return `${base}/auth/microsoft/callback`
+}
+
 function isConfigured() {
-  return !!(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET &&
-    process.env.MICROSOFT_CLIENT_ID !== 'your_microsoft_client_id_here')
+  return !!(
+    process.env.MICROSOFT_CLIENT_ID &&
+    process.env.MICROSOFT_CLIENT_SECRET &&
+    process.env.MICROSOFT_CLIENT_ID !== 'your_microsoft_client_id_here'
+  )
 }
 
 function getAuthUrl() {
   const params = new URLSearchParams({
     client_id: process.env.MICROSOFT_CLIENT_ID,
     response_type: 'code',
-    redirect_uri: process.env.MICROSOFT_REDIRECT_URI,
+    redirect_uri: getRedirectUri(),
     scope: SCOPES,
     response_mode: 'query',
   })
@@ -33,7 +42,7 @@ async function handleCallback(code) {
     body: new URLSearchParams({
       client_id: process.env.MICROSOFT_CLIENT_ID,
       client_secret: process.env.MICROSOFT_CLIENT_SECRET,
-      redirect_uri: process.env.MICROSOFT_REDIRECT_URI,
+      redirect_uri: getRedirectUri(),
       grant_type: 'authorization_code',
       code,
       scope: SCOPES,
@@ -64,15 +73,10 @@ async function graphGet(path) {
 async function scanOutlook() {
   if (!outlookTokens) throw new Error('Not connected to Outlook')
 
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-
-  const filter = `receivedDateTime ge ${sixMonthsAgo.toISOString()}`
+  // Note: $search and $filter cannot be combined in Graph API
   const search = 'subscription OR renewal OR receipt OR billing OR payment OR invoice OR membership'
-
   const params = new URLSearchParams({
     $search: `"${search}"`,
-    $filter: filter,
     $top: '100',
     $select: 'subject,from,receivedDateTime,bodyPreview',
     $orderby: 'receivedDateTime desc',
@@ -85,33 +89,19 @@ async function scanOutlook() {
     const subject = msg.subject || ''
     const from = msg.from?.emailAddress?.address || ''
     const body = msg.bodyPreview || ''
-
     const parsed = parseEmail(subject, body, from)
     if (parsed.name || parsed.amount) {
-      results.push({
-        ...parsed,
-        emailDate: msg.receivedDateTime,
-        subject,
-        from,
-        messageId: msg.id,
-      })
+      results.push({ ...parsed, emailDate: msg.receivedDateTime, subject, from, messageId: msg.id })
     }
   }
 
   return results
 }
 
-function disconnect() {
-  outlookTokens = null
-  outlookUserEmail = null
-}
+function disconnect() { outlookTokens = null; outlookUserEmail = null }
 
 function getStatus() {
-  return {
-    connected: !!outlookTokens,
-    email: outlookUserEmail,
-    configured: isConfigured(),
-  }
+  return { connected: !!outlookTokens, email: outlookUserEmail, configured: isConfigured() }
 }
 
 module.exports = { isConfigured, getAuthUrl, handleCallback, scanOutlook, disconnect, getStatus }

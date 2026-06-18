@@ -63,9 +63,15 @@ router.get('/login/google/callback', (req, res, next) => {
   })(req, res, next);
 });
 
-router.get('/me', authMiddleware, (req, res) => {
-  const { _id, email, name, avatar, plan } = req.user;
-  res.json({ id: _id, email, name, avatar, plan });
+router.get('/me', authMiddleware, async (req, res) => {
+  try {
+    let user = req.user;
+    if (user.plan === 'premium' && user.premiumExpiresAt && new Date() > new Date(user.premiumExpiresAt)) {
+      user = await User.findByIdAndUpdate(user._id, { plan: 'free' }, { new: true });
+    }
+    const { _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt } = user;
+    res.json({ id: _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt });
+  } catch { res.status(500).json({ error: 'Server error' }); }
 });
 router.post('/logout', (req, res) => res.json({ message: 'Logged out' }));
 module.exports = router;

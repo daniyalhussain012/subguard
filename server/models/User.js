@@ -8,5 +8,6 @@ const userSchema = new mongoose.Schema({
   stripeCustomerId: String,
   stripeSessionId: String,
   premiumActivatedAt: Date,
+  premiumExpiresAt: Date,
 }, { timestamps: true });
 module.exports = mongoose.model('User', userSchema);

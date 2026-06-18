@@ -53,7 +53,7 @@ export default function Upgrade() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${API_URL}/stripe/create-checkout-session`, {
+      const res = await fetch(`${API_URL}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       })
@@ -96,7 +96,7 @@ export default function Upgrade() {
           <ShieldCheck size={22} className="text-white" />
         </div>
         <h1 className="text-2xl font-bold text-slate-100 mb-2">Upgrade to SubGuard Pro</h1>
-        <p className="text-slate-400 text-sm">One-time payment · No subscription · No recurring fees · Lifetime access</p>
+        <p className="text-slate-400 text-sm">One-time payment · No subscription · No recurring fees · 5 years of access</p>
       </div>
 
       <div className={`card p-4 mb-6 flex items-center justify-between gap-4 ${activeSubs >= 5 ? 'border border-red-500/30' : ''}`}>
@@ -151,7 +151,7 @@ export default function Upgrade() {
             <span className="text-3xl font-bold text-slate-100">$5</span>
             <span className="text-slate-400 text-sm mb-1">one-time</span>
           </div>
-          <p className="text-[11px] text-slate-600 mb-4">Pay once, use forever. No recurring charges.</p>
+          <p className="text-[11px] text-slate-600 mb-4">Pay once, 5 years of access. No recurring charges.</p>
           <div className="space-y-2 mb-6">
             {PRO_FEATURES.map(f => (
               <div key={f} className="flex items-center gap-2 text-sm text-slate-300">

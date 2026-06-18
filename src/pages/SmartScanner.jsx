@@ -328,10 +328,36 @@ export default function SmartScanner() {
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    setImagePreview(URL.createObjectURL(file))
-    setOcrProgress('Loading OCR engine...')
     setText('')
     setParsed(null)
+
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+
+    if (isPDF) {
+      setImagePreview(null)
+      setOcrProgress('Reading PDF...')
+      try {
+        const arrayBuffer = await file.arrayBuffer()
+        const pdfjsLib = await import('pdfjs-dist')
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+        let fullText = ''
+        for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+          const page = await pdf.getPage(i)
+          const content = await page.getTextContent()
+          fullText += content.items.map(item => item.str).join(' ') + '\n'
+        }
+        setText(fullText)
+        setOcrProgress(null)
+        setParsed(smartParse(fullText))
+      } catch {
+        setOcrProgress('Could not read PDF. Try a different file or paste the text instead.')
+      }
+      return
+    }
+
+    setImagePreview(URL.createObjectURL(file))
+    setOcrProgress('Loading OCR engine...')
     try {
       const { createWorker } = await import('tesseract.js')
       const worker = await createWorker('eng', 1, {
@@ -344,7 +370,7 @@ export default function SmartScanner() {
       setText(extracted)
       setOcrProgress(null)
       setParsed(smartParse(extracted))
-    } catch (err) {
+    } catch {
       setOcrProgress('Couldn\'t read image. Try a clearer photo or paste text instead.')
     }
   }
@@ -483,9 +509,9 @@ export default function SmartScanner() {
         <div className="space-y-4">
           <div onClick={() => fileRef.current?.click()} className="card border-dashed border-2 border-slate-600 hover:border-cyan-500/50 p-10 text-center cursor-pointer transition-colors">
             <Upload size={32} className="mx-auto mb-3 text-slate-500" />
-            <div className="font-semibold text-slate-300 mb-1">Upload Receipt Image</div>
-            <div className="text-xs text-slate-500">JPG, PNG, WebP — processed entirely in your browser</div>
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} />
+            <div className="font-semibold text-slate-300 mb-1">Upload Receipt or Invoice</div>
+            <div className="text-xs text-slate-500">JPG, PNG, WebP, PDF — processed entirely in your browser</div>
+            <input ref={fileRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={handleImageUpload} />
           </div>
           {imagePreview && <div className="card p-3"><img src={imagePreview} alt="Receipt" className="max-h-48 object-contain mx-auto rounded-lg" /></div>}
           {ocrProgress && (

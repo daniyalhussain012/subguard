@@ -20,8 +20,21 @@ const REMINDER_OPTIONS = [
   { label: '14 days before', value: 14 },
 ]
 
+const CURRENCIES = [
+  { code: 'USD', symbol: '$',   label: 'USD — US Dollar' },
+  { code: 'CAD', symbol: 'C$',  label: 'CAD — Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$',  label: 'AUD — Australian Dollar' },
+  { code: 'GBP', symbol: '£',   label: 'GBP — British Pound' },
+  { code: 'EUR', symbol: '€',   label: 'EUR — Euro' },
+  { code: 'PKR', symbol: '₨',   label: 'PKR — Pakistani Rupee' },
+  { code: 'INR', symbol: '₹',   label: 'INR — Indian Rupee' },
+  { code: 'NZD', symbol: 'NZ$', label: 'NZD — New Zealand Dollar' },
+  { code: 'SGD', symbol: 'S$',  label: 'SGD — Singapore Dollar' },
+  { code: 'AED', symbol: 'د.إ', label: 'AED — UAE Dirham' },
+]
+
 const EMPTY = {
-  name: '', category: 'Streaming', amount: '', billingCycle: 'Monthly',
+  name: '', category: 'Streaming', amount: '', currency: 'USD', billingCycle: 'Monthly',
   nextBillingDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
   autoRenewal: true, paymentMethod: '', notes: '', status: 'Active',
   importance: 'Nice to Have', canDowngrade: false, alternativeNotes: '',
@@ -171,9 +184,23 @@ export default function AddEditSubscription() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="label">Amount *</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
-                <input className={`input pl-7 ${errors.amount ? 'border-red-500/60' : ''}`} type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
+              <div className="flex gap-2">
+                <select
+                  className="input w-24 shrink-0 text-sm px-2"
+                  value={form.currency || 'USD'}
+                  onChange={e => set('currency', e.target.value)}
+                  title="Currency"
+                >
+                  {CURRENCIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.code}</option>
+                  ))}
+                </select>
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-sm">
+                    {CURRENCIES.find(c => c.code === (form.currency || 'USD'))?.symbol || '$'}
+                  </span>
+                  <input className={`input pl-8 ${errors.amount ? 'border-red-500/60' : ''}`} type="number" step="0.01" min="0" placeholder="0.00" value={form.amount} onChange={e => set('amount', e.target.value)} />
+                </div>
               </div>
               {errors.amount && <p className="text-red-400 text-xs mt-1">{errors.amount}</p>}
               {monthly > 0 && form.billingCycle !== 'Monthly' && (

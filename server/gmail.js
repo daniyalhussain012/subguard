@@ -11,11 +11,17 @@ const SEARCH_QUERIES = [
   'from:(netflix.com OR spotify.com OR adobe.com OR amazon.com OR apple.com OR google.com OR microsoft.com OR hulu.com OR disneyplus.com)',
 ]
 
+function getRedirectUri() {
+  if (process.env.GMAIL_REDIRECT_URI) return process.env.GMAIL_REDIRECT_URI
+  const base = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3001}`
+  return `${base}/auth/google/callback`
+}
+
 function createOAuth2Client() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    getRedirectUri()
   )
 }
 
