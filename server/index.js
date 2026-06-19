@@ -3,8 +3,12 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const passport = require('passport');
+const cron = require('node-cron');
+const webpush = require('web-push');
 const connectDB = require('./db');
 const User = require('./models/User');
+const Subscription = require('./models/Subscription');
+const PushSubscription = require('./models/PushSubscription');
 const gmail = require('./gmail');
 const outlook = require('./outlook');
 
@@ -45,10 +49,11 @@ app.use(session({ secret: process.env.SESSION_SECRET || 'subguard-secret', resav
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ── App auth + subscriptions + stripe ────────────────────────────────────────
+// ── App auth + subscriptions + stripe + push ──────────────────────────────────
 app.use('/auth', require('./routes/auth'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/stripe', require('./routes/stripe'));
+app.use('/api', require('./routes/push'));
 
 // ── Email scanning status ─────────────────────────────────────────────────────
 app.get('/api/status', (req, res) => {
@@ -110,5 +115,93 @@ app.post('/api/disconnect-outlook', (req, res) => { outlook.disconnect(); res.js
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+// ── Daily push notification cron ──────────────────────────────────────────────
+
+async function sendRenewalPushNotifications() {
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+    console.log('[Push Cron] VAPID keys not configured, skipping.');
+    return;
+  }
+
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:support@renewbell.app',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const stages = [
+    { days: 7, title: s => `🔔 ${s.name} renews in 1 week`, body: s => `${s.currency || 'USD'} ${s.amount} will be charged in 7 days. Open RenewBell to manage.`, key: 's7' },
+    { days: 2, title: s => `⚠️ ${s.name} renews in 2 days`, body: s => `${s.currency || 'USD'} ${s.amount} charges in 2 days. Keep or cancel?`, key: 's2' },
+    { days: 1, title: s => `🚨 Final reminder: ${s.name} renews TOMORROW`, body: s => `${s.currency || 'USD'} ${s.amount} charges tomorrow. Last chance to cancel.`, key: 's1' },
+  ];
+
+  let sent = 0;
+  let skipped = 0;
+
+  for (const stage of stages) {
+    const targetDate = new Date(today);
+    targetDate.setDate(targetDate.getDate() + stage.days);
+    const dateStart = new Date(targetDate);
+    dateStart.setHours(0, 0, 0, 0);
+    const dateEnd = new Date(targetDate);
+    dateEnd.setHours(23, 59, 59, 999);
+
+    const subs = await Subscription.find({
+      isActive: true,
+      nextBillingDate: { $gte: dateStart, $lte: dateEnd },
+    });
+
+    for (const sub of subs) {
+      // Skip if already sent for this billing date
+      const forDate = dateStart.toISOString().split('T')[0];
+      if (sub.notifsSent?.forDate === forDate && sub.notifsSent?.[stage.key]) {
+        skipped++;
+        continue;
+      }
+
+      const pushSub = await PushSubscription.findOne({ user: sub.user });
+      if (!pushSub) continue;
+
+      const payload = JSON.stringify({
+        title: stage.title(sub),
+        body: stage.body(sub),
+        tag: `renewal-${sub._id}-${stage.days}`,
+        url: '/',
+        subId: sub._id.toString(),
+        renewalDate: forDate,
+        stage: stage.days,
+      });
+
+      try {
+        await webpush.sendNotification(pushSub.subscription, payload);
+        // Mark stage as sent for this billing date
+        const prev = sub.notifsSent?.forDate === forDate ? sub.notifsSent : { forDate, s7: false, s2: false, s1: false };
+        await Subscription.findByIdAndUpdate(sub._id, {
+          notifsSent: { ...prev, forDate, [stage.key]: true },
+        });
+        sent++;
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          // Subscription gone from device — remove it
+          await PushSubscription.deleteOne({ user: sub.user });
+        } else {
+          console.error(`[Push Cron] Failed to send to user ${sub.user}:`, err.message);
+        }
+      }
+    }
+  }
+
+  console.log(`[Push Cron] Done. Sent: ${sent}, Skipped (already sent): ${skipped}`);
+}
+
+// Run daily at 8:00 AM UTC
+cron.schedule('0 8 * * *', () => {
+  console.log('[Push Cron] Running daily renewal notifications...');
+  sendRenewalPushNotifications().catch(err => console.error('[Push Cron] Error:', err.message));
+});
+
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`SubGuard server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`RenewBell server running on port ${PORT}`));

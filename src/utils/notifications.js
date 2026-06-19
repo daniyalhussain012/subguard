@@ -1,6 +1,6 @@
 import { getDaysUntil, formatCurrency } from './storage'
 
-const VAPID_PUBLIC_KEY = 'BDYXEjQNp7YOnWdpmVr3jNXf8cR0oB4awm7yyVqnHQoJl1Cj27mzwZ-TDA_xRgPEPd9cVvfVH5wz-beyOH1MxfA'
+const VAPID_PUBLIC_KEY = 'BAfGteonw39oJKjnw-i15dWF8RjDahPoHb_Qj6Wx1_2ZRimw5OhX4_8aBOHZXRvVl__8D7bIv_lpbpI9Thjx1nQ'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 let swRegistration = null
@@ -56,20 +56,17 @@ export async function subscribeToPush() {
 
 async function sendSubscriptionToServer(sub) {
   try {
-    const subs = getStoredSubscriptionsForPush()
+    const token = localStorage.getItem('subguard_token')
+    if (!token) return
     await fetch(`${API}/api/push-subscribe`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), subscriptions: subs }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
     })
   } catch {}
-}
-
-function getStoredSubscriptionsForPush() {
-  try {
-    const raw = localStorage.getItem('subguard_subscriptions')
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
 }
 
 export async function unsubscribeFromPush() {
@@ -78,9 +75,13 @@ export async function unsubscribeFromPush() {
     const sub = await reg?.pushManager?.getSubscription()
     if (sub) {
       await sub.unsubscribe()
+      const token = localStorage.getItem('subguard_token')
       await fetch(`${API}/api/push-unsubscribe`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ endpoint: sub.endpoint }),
       })
     }

@@ -9,5 +9,11 @@ const subscriptionSchema = new mongoose.Schema({
   nextBillingDate: Date,
   isActive: { type: Boolean, default: true },
   notes: String,
+  notifsSent: {
+    forDate: String,
+    s7: { type: Boolean, default: false },
+    s2: { type: Boolean, default: false },
+    s1: { type: Boolean, default: false },
+  },
 }, { timestamps: true });
 module.exports = mongoose.model('Subscription', subscriptionSchema);

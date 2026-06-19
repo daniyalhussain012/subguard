@@ -1,4 +1,4 @@
-const CACHE_NAME = 'subguard-v3'
+const CACHE_NAME = 'renewbell-v1'
 
 self.addEventListener('install', e => {
   e.waitUntil(self.skipWaiting())
@@ -59,7 +59,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   if (!e.data) return
   let data = {}
-  try { data = e.data.json() } catch { data = { title: 'SubGuard', body: e.data.text() } }
+  try { data = e.data.json() } catch { data = { title: 'RenewBell', body: e.data.text() } }
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',
@@ -69,7 +69,7 @@ self.addEventListener('push', e => {
     requireInteraction: true,
     actions: data.actions || [],
   }
-  e.waitUntil(self.registration.showNotification(data.title || 'SubGuard', options))
+  e.waitUntil(self.registration.showNotification(data.title || 'RenewBell', options))
 })
 
 self.addEventListener('notificationclick', e => {
