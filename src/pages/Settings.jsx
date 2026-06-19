@@ -125,7 +125,7 @@ export default function Settings() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `subguard-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `renewbell-backup-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
     setExportSuccess(true)
@@ -145,14 +145,14 @@ export default function Settings() {
         if (data.settings)      localStorage.setItem(activeKeys.SETTINGS,      JSON.stringify(data.settings))
         window.location.reload()
       } catch {
-        setImportError('Invalid file format. Please use a SubGuard backup file.')
+        setImportError('Invalid file format. Please use a RenewBell backup file.')
       }
     }
     reader.readAsText(file)
   }
 
   function handleClearData() {
-    if (!window.confirm('This will delete ALL your SubGuard data permanently. Are you sure?')) return
+    if (!window.confirm('This will delete ALL your RenewBell data permanently. Are you sure?')) return
     if (!window.confirm('This cannot be undone. Delete everything?')) return
     Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
@@ -193,7 +193,7 @@ export default function Settings() {
           </button>
         )}
         <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20">
-          Sign Out of SubGuard
+          Sign Out of RenewBell
         </button>
       </Section>
 
@@ -237,18 +237,18 @@ export default function Settings() {
       <Section icon={Smartphone} title="Install App">
         {isInstalled ? (
           <div className="flex items-center gap-2 text-sm text-emerald-400 p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-lg">
-            <CheckCircle size={16} /> SubGuard is installed on your device
+            <CheckCircle size={16} /> RenewBell is installed on your device
           </div>
         ) : installPrompt ? (
           <div className="space-y-3">
-            <p className="text-sm text-slate-400">Install SubGuard as an app on your device for a native experience and push notifications that work even when the browser is closed.</p>
+            <p className="text-sm text-slate-400">Install RenewBell as an app on your device for a native experience and push notifications that work even when the browser is closed.</p>
             <button onClick={handleInstall} className="btn-primary w-full justify-center">
               <Smartphone size={14} /> Add to Home Screen
             </button>
           </div>
         ) : isIOS ? (
           <div className="space-y-2">
-            <p className="text-sm text-slate-400">To install SubGuard on iOS:</p>
+            <p className="text-sm text-slate-400">To install RenewBell on iOS:</p>
             <ol className="text-xs text-slate-500 space-y-1 pl-4 list-decimal">
               <li>Tap the <strong className="text-slate-300">Share</strong> button in Safari</li>
               <li>Scroll down and tap <strong className="text-slate-300">Add to Home Screen</strong></li>
@@ -256,7 +256,7 @@ export default function Settings() {
             </ol>
           </div>
         ) : (
-          <p className="text-sm text-slate-500">Open SubGuard in Chrome or Edge on your device to install it as an app.</p>
+          <p className="text-sm text-slate-500">Open RenewBell in Chrome or Edge on your device to install it as an app.</p>
         )}
       </Section>
 
@@ -375,9 +375,9 @@ export default function Settings() {
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
             <ShieldCheck size={16} className="text-white" />
           </div>
-          <span className="font-bold text-slate-100">SubGuard</span>
+          <span className="font-bold text-slate-100">RenewBell</span>
         </div>
-        <p className="text-xs text-slate-500">Stop getting charged for things you forgot about.</p>
+        <p className="text-xs text-slate-500">Never miss a renewal again.</p>
         <p className="text-xs text-slate-700">v2.0.0 · Data stored per-account in your browser · Signed in with Google</p>
       </div>
     </div>

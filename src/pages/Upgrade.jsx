@@ -71,7 +71,7 @@ export default function Upgrade() {
           className="w-20 h-20 bg-gradient-to-br from-amber-400 to-amber-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-amber-500/30">
           <Crown size={36} className="text-white" />
         </motion.div>
-        <h1 className="text-2xl font-bold text-slate-100 mb-2">You're on SubGuard Pro!</h1>
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">You're on RenewBell Pro!</h1>
         <p className="text-slate-400 mb-8">All features unlocked. Track unlimited subscriptions.</p>
         <div className="card p-5 text-left space-y-2.5 mb-6">
           {PRO_FEATURES.map(f => (
@@ -95,7 +95,7 @@ export default function Upgrade() {
         <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/20">
           <ShieldCheck size={22} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-100 mb-2">Upgrade to SubGuard Pro</h1>
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">Upgrade to RenewBell Pro</h1>
         <p className="text-slate-400 text-sm">One-time payment · No subscription · No recurring fees · 5 years of access</p>
       </div>
 

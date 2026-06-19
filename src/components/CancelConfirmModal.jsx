@@ -145,10 +145,10 @@ export default function CancelConfirmModal({ sub, onClose, onConfirmed }) {
                   <div className="text-center">
                     <div className="text-5xl mb-3">⚠️</div>
                     <h2 className="text-xl font-bold text-slate-100 mb-2">
-                      SubGuard does NOT cancel subscriptions for you
+                      RenewBell does NOT cancel subscriptions for you
                     </h2>
                     <p className="text-sm text-slate-400 leading-relaxed">
-                      Clicking "cancel" here only marks <strong className="text-slate-200">{sub.name}</strong> as cancelled inside SubGuard.
+                      Clicking "cancel" here only marks <strong className="text-slate-200">{sub.name}</strong> as cancelled inside RenewBell.
                       You still need to cancel directly with {sub.name}.
                     </p>
                   </div>

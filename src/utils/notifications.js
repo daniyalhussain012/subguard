@@ -37,11 +37,10 @@ export async function subscribeToPush() {
   try {
     const reg = swRegistration || await navigator.serviceWorker?.ready
     if (!reg) return null
+    // Always unsubscribe existing first so a changed VAPID key doesn't cause
+    // the server to hold a stale subscription that will silently fail.
     const existing = await reg.pushManager.getSubscription()
-    if (existing) {
-      await sendSubscriptionToServer(existing)
-      return existing
-    }
+    if (existing) await existing.unsubscribe()
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),

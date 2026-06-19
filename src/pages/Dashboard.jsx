@@ -278,8 +278,8 @@ export default function Dashboard() {
       {subscriptions.length === 0 && (
         <div className="card p-12 text-center">
           <div className="text-5xl mb-4">🛡️</div>
-          <h3 className="text-xl font-bold text-slate-100 mb-2">Welcome to SubGuard</h3>
-          <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">Add your subscriptions to start protecting your wallet from forgotten charges.</p>
+          <h3 className="text-xl font-bold text-slate-100 mb-2">Welcome to RenewBell</h3>
+          <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">Add your subscriptions to start tracking renewals and never get surprised by a charge again.</p>
           <div className="flex gap-3 justify-center">
             <button onClick={() => navigate('/add')} className="btn-primary"><Plus size={15} /> Add Manually</button>
             <button onClick={() => navigate('/scanner')} className="btn-secondary"><Mail size={15} /> Scan Receipt</button>

@@ -29,7 +29,7 @@ export function PauseConfirmModal({ sub, onClose, onConfirm }) {
             <PauseCircle size={40} className="text-amber-400 mx-auto mb-3" />
             <h2 className="text-lg font-bold text-slate-100 mb-1">Pause {sub.name}?</h2>
             <p className="text-sm text-slate-400 leading-relaxed">
-              This marks it as paused in SubGuard ({formatCurrency(monthly)}/mo won't count toward active spend).
+              This marks it as paused in RenewBell ({formatCurrency(monthly)}/mo won't count toward active spend).
               You'll need to check with {sub.name} directly to pause your actual account there.
             </p>
           </div>
@@ -50,7 +50,7 @@ export function PauseConfirmModal({ sub, onClose, onConfirm }) {
               onClick={onConfirm}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold text-sm hover:bg-amber-500/30 transition-colors"
             >
-              <PauseCircle size={15} /> Pause in SubGuard
+              <PauseCircle size={15} /> Pause in RenewBell
             </button>
             <button onClick={onClose} className="btn-secondary px-4">Nevermind</button>
           </div>
@@ -82,7 +82,7 @@ export function ResumeConfirmModal({ sub, onClose, onConfirm }) {
             <PlayCircle size={40} className="text-emerald-400 mx-auto mb-3" />
             <h2 className="text-lg font-bold text-slate-100 mb-1">Resume {sub.name}?</h2>
             <p className="text-sm text-slate-400 leading-relaxed">
-              This marks it as active again in SubGuard. Make sure you've also reactivated it directly with {sub.name}.
+              This marks it as active again in RenewBell. Make sure you've also reactivated it directly with {sub.name}.
             </p>
           </div>
           <div className="flex gap-2">

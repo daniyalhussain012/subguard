@@ -193,7 +193,7 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
         <h3 className="font-semibold text-slate-300">{label}</h3>
       </div>
       <p className="text-sm text-slate-400">
-        Automatically detect subscriptions from your {label} inbox. Read-only access — SubGuard never stores or shares your emails.
+        Automatically detect subscriptions from your {label} inbox. Read-only access — RenewBell never stores or shares your emails.
       </p>
       <a href={connectUrl} className="btn-primary w-full justify-center">
         <ExternalLink size={14} /> Connect {label}
@@ -591,7 +591,7 @@ export default function SmartScanner() {
             {parsed.isTrial && <div className="text-xs font-semibold text-pink-400 p-2 bg-pink-500/10 border border-pink-500/25 rounded-lg">⏰ Trial detected — you'll be charged after trial ends</div>}
             {parsed.isPriceIncrease && <div className="text-xs font-semibold text-orange-400 p-2 bg-orange-500/10 border border-orange-500/25 rounded-lg">📈 Price increase detected — check the new amount carefully</div>}
             <div className="flex gap-3">
-              <button onClick={handleUseData} className="btn-primary flex-1 justify-center">Add to SubGuard <ArrowRight size={14} /></button>
+              <button onClick={handleUseData} className="btn-primary flex-1 justify-center">Add to RenewBell <ArrowRight size={14} /></button>
               <button onClick={() => navigate('/add')} className="btn-ghost text-xs">Manual</button>
             </div>
           </motion.div>
@@ -613,7 +613,7 @@ export default function SmartScanner() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-slate-200 truncate">{entry.parsed?.name || 'Unknown service'}</div>
-                  <div className="text-xs text-slate-500">{entry.scannedAt} · {entry.added ? 'Added to SubGuard' : 'Scanned only'}</div>
+                  <div className="text-xs text-slate-500">{entry.scannedAt} · {entry.added ? 'Added to RenewBell' : 'Scanned only'}</div>
                   {entry.parsed?.amount && <div className="text-xs text-slate-400">${entry.parsed.amount} · {entry.parsed.billingCycle || 'Monthly'}</div>}
                 </div>
               </div>

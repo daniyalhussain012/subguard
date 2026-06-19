@@ -6,8 +6,8 @@ const STEPS = [
   {
     icon: ShieldCheck,
     color: 'from-cyan-500 to-cyan-600',
-    title: 'Welcome to SubGuard',
-    body: 'Stop getting charged for things you forgot about. SubGuard tracks every subscription, alerts you before renewals, and helps you cancel what you don\'t use.',
+    title: 'Welcome to RenewBell',
+    body: 'Never miss a renewal again. RenewBell tracks every subscription, alerts you before renewals, and helps you cancel what you don\'t use.',
   },
   {
     icon: Radar,
@@ -19,7 +19,7 @@ const STEPS = [
     icon: Mail,
     color: 'from-emerald-500 to-emerald-600',
     title: 'Smart Scanner',
-    body: 'Connect Gmail or Outlook to automatically find subscriptions in your inbox. Or paste a receipt, upload a screenshot — SubGuard reads it all.',
+    body: 'Connect Gmail or Outlook to automatically find subscriptions in your inbox. Or paste a receipt, upload a screenshot — RenewBell reads it all.',
   },
   {
     icon: Trophy,
