@@ -201,9 +201,10 @@ async function sendRenewalPushNotifications() {
 // ── HTTP trigger for external cron (works even when Render is sleeping) ────────
 // Call this from cron-job.org daily to wake the server AND fire push notifications.
 // Protected by CRON_SECRET env var to prevent unauthorized calls.
-app.post('/api/trigger-push', async (req, res) => {
+async function handleTriggerPush(req, res) {
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers['x-cron-secret'] !== secret) {
+  const provided = req.headers['x-cron-secret'] || req.query.secret;
+  if (secret && provided !== secret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   console.log('[Push Trigger] HTTP trigger called');
@@ -213,7 +214,11 @@ app.post('/api/trigger-push', async (req, res) => {
       console.error('[Push Trigger] Error:', err.message);
       res.status(500).json({ ok: false, error: err.message });
     });
-});
+}
+
+// Accept both GET and POST so cron-job.org works with default settings (no method/header config needed)
+app.get('/api/trigger-push', handleTriggerPush);
+app.post('/api/trigger-push', handleTriggerPush);
 
 // In-process cron as a fallback (only fires if server stays warm)
 cron.schedule('0 8 * * *', () => {
