@@ -1,0 +1,21 @@
+name: Daily renewal push notifications
+
+# Triggers the RenewBell server to send Web Push renewal reminders
+# (7 days / 2 days / 1 day before each renewal) to all subscribed devices.
+on:
+  schedule:
+    - cron: '0 8 * * *' # 8:00 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  trigger-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger push notifications
+        run: |
+          # First ping wakes the server if it happens to be asleep
+          curl -sS --max-time 120 https://subguard-api-cug1.onrender.com/health || true
+          sleep 5
+          curl -sS --max-time 120 "https://subguard-api-cug1.onrender.com/api/trigger-push"
+          echo ""
+          echo "Push trigger fired at $(date -u)"

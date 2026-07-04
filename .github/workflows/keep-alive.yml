@@ -1,0 +1,19 @@
+name: Keep server awake
+
+# Render free tier spins the server down after 15 minutes of inactivity,
+# which shows users a "SERVICE WAKING UP" screen and blocks the in-process
+# notification cron. Pinging /health every 10 minutes keeps it warm 24/7.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -sS --max-time 120 https://subguard-api-cug1.onrender.com/health
+          echo ""
+          echo "Server pinged at $(date -u)"
