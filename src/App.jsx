@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
 import { defaultSettings } from './utils/storage'
-import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1 } from './utils/notifications'
+import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1, subscribeToPush } from './utils/notifications'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallback'
@@ -25,6 +25,8 @@ const Upgrade = lazy(() => import('./pages/Upgrade'))
 
 export const AppContext = createContext(null)
 export const useApp = () => useContext(AppContext)
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com'
 
 const pageVariants = {
   initial: { opacity: 0, x: 18 },
@@ -155,7 +157,13 @@ function AppInner() {
     }
 
     loadAll(activeKeys)
-    registerServiceWorker()
+    registerServiceWorker().then(() => {
+      // Re-register this device for background push whenever permission is
+      // already granted — keeps the server's copy fresh (e.g. after key rotation)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        subscribeToPush()
+      }
+    })
     if (!localStorage.getItem(activeKeys.ONBOARDING)) setShowOnboarding(true)
 
     // Handle Stripe success redirect
@@ -193,6 +201,22 @@ function AppInner() {
   useEffect(() => {
     if (subscriptions.length) checkAndSendNotifications(subscriptions, settings)
   }, [subscriptions])
+
+  // Mirror subscriptions to the server (debounced) so background push
+  // reminders work even when the app is closed. Fire-and-forget.
+  useEffect(() => {
+    if (!userId) return
+    const token = localStorage.getItem('subguard_token')
+    if (!token) return
+    const t = setTimeout(() => {
+      fetch(`${API_URL}/api/subscriptions/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ subscriptions }),
+      }).catch(() => {})
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [subscriptions, userId])
 
   function getNotificationTitle() {
     const urgent = subscriptions.filter(s => {
