@@ -15,16 +15,19 @@ export default function LoginPage() {
 
   async function handleLogin() {
     setWaking(true)
-    try {
-      // Wake up the Render server before redirecting — prevents the raw Render
-      // "SERVICE WAKING UP" screen from showing. no-cors means we don't need
-      // CORS headers; we just need the server to receive the request.
-      await Promise.race([
-        fetch(`${API_URL}/api/status`, { mode: 'no-cors' }),
-        new Promise(resolve => setTimeout(resolve, 12000)), // wait up to 12s
-      ])
-    } catch {
-      // Network error — redirect anyway, Google OAuth will still work
+    // Poll /health until the real API responds — Render's wake-up page returns
+    // HTML without CORS headers, so fetch throws or returns non-JSON until the
+    // actual server is running. Only redirect once we get a real answer.
+    const deadline = Date.now() + 120000 // up to 2 minutes
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${API_URL}/health`, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json().catch(() => null)
+          if (data?.status === 'ok') break // server is truly awake
+        }
+      } catch { /* still waking — keep polling */ }
+      await new Promise(r => setTimeout(r, 3000))
     }
     loginWithGoogle() // redirects browser to Google OAuth
   }
@@ -57,8 +60,8 @@ export default function LoginPage() {
           {waking ? (
             <div className="text-center py-4">
               <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-slate-300 font-medium text-sm">Connecting to server…</p>
-              <p className="text-slate-500 text-xs mt-1">This takes up to 15 seconds on first load</p>
+              <p className="text-slate-300 font-medium text-sm">Waking up the server…</p>
+              <p className="text-slate-500 text-xs mt-1">This can take up to a minute on first load. You'll be redirected automatically.</p>
             </div>
           ) : (
             <>

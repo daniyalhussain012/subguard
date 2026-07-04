@@ -18,7 +18,7 @@ const createSession = async (email, userId, frontendUrl) => {
       price_data: {
         currency: 'usd',
         product_data: {
-          name: 'SubGuard Pro — 5-Year Access',
+          name: 'RenewBell Pro — 5-Year Access',
           description: 'Unlimited subscriptions, all features, 5 years of access. One-time payment.',
         },
         unit_amount: 500,
