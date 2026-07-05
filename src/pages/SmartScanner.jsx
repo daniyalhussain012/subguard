@@ -103,6 +103,7 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
   const isGmail = provider === 'gmail'
   const label = isGmail ? 'Gmail' : 'Outlook / Hotmail'
   const icon = isGmail ? '📧' : '📨'
+  const connectUrl = `${API}/auth/${isGmail ? 'google' : 'microsoft'}`
   const [showSetup, setShowSetup] = useState(false)
 
   if (!status.configured) {

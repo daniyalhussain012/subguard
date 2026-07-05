@@ -17,7 +17,18 @@ connectDB();
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.app').replace(/\/$/, '');
 
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+// Allow both the old and new app domains during the RenewBell transition,
+// so PWAs installed from the old URL keep working.
+const ALLOWED_ORIGINS = [...new Set([
+  FRONTEND_URL,
+  'https://renewbell.vercel.app',
+  'https://subguard-five.vercel.app',
+  'http://localhost:5173',
+])];
+app.use(cors({
+  origin: (origin, cb) => cb(null, !origin || ALLOWED_ORIGINS.includes(origin)),
+  credentials: true,
+}));
 
 // ── Stripe webhook (must come BEFORE json body parser) ───────────────────────
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
