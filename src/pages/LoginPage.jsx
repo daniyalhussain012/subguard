@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com'
@@ -96,6 +96,9 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-slate-700 mt-5">
           Your data is stored in your browser · Each account is fully isolated
+        </p>
+        <p className="text-center text-xs mt-2">
+          <Link to="/privacy" className="text-slate-600 hover:text-cyan-500 underline">Privacy Policy</Link>
         </p>
       </div>
     </div>

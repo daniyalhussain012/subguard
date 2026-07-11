@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle, Zap, Crown } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
 import { useAuth } from '../contexts/AuthContext'
 import { AVATAR_OPTIONS, defaultSettings } from '../utils/storage'
@@ -51,13 +51,15 @@ const CURRENCIES = [
 
 export default function Settings() {
   const { settings, updateSettings, darkMode, setDarkMode, activeKeys } = useApp()
-  const { user, isPremium, logout } = useAuth()
+  const { user, isPremium, logout, deleteAccount } = useAuth()
   const navigate = useNavigate()
   const [notifStatus, setNotifStatus] = useState(
     typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
   )
   const [exportSuccess, setExportSuccess] = useState(false)
   const [importError, setImportError] = useState('')
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteAccountError, setDeleteAccountError] = useState('')
   const [installPrompt, setInstallPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [pushSubscribed, setPushSubscribed] = useState(false)
@@ -156,6 +158,21 @@ export default function Settings() {
     if (!window.confirm('This cannot be undone. Delete everything?')) return
     Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
+  }
+
+  async function handleDeleteAccount() {
+    if (!window.confirm('This permanently deletes your RenewBell account and erases your data — subscriptions, reminders, and push registration — from our servers. This cannot be undone. Continue?')) return
+    if (!window.confirm('Are you absolutely sure? There is no way to recover your account after this.')) return
+    setDeleteAccountError('')
+    setDeletingAccount(true)
+    const { ok } = await deleteAccount()
+    if (ok) {
+      Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
+      window.location.href = '/login'
+    } else {
+      setDeletingAccount(false)
+      setDeleteAccountError('Failed to delete your account. Please try again or contact support.')
+    }
   }
 
   const REMINDER_DAY_OPTIONS = [1, 2, 3, 7, 14]
@@ -370,6 +387,16 @@ export default function Settings() {
         </div>
       </Section>
 
+      <Section icon={AlertCircle} title="Danger Zone">
+        <p className="text-xs text-slate-500 mb-3">
+          Permanently delete your RenewBell account and all data associated with it — email, subscriptions, reminders, and push registration — from our servers. This is different from "Clear All My Data" above, which only clears your local device.
+        </p>
+        <button onClick={handleDeleteAccount} disabled={deletingAccount} className="btn-danger w-full justify-center py-2.5 disabled:opacity-60">
+          <Trash2 size={14} /> {deletingAccount ? 'Deleting Account…' : 'Delete My Account'}
+        </button>
+        {deleteAccountError && <p className="text-xs text-red-400 text-center mt-2">{deleteAccountError}</p>}
+      </Section>
+
       <div className="card p-5 text-center space-y-2">
         <div className="flex items-center justify-center gap-2">
           <div className="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
@@ -379,6 +406,9 @@ export default function Settings() {
         </div>
         <p className="text-xs text-slate-500">Never miss a renewal again.</p>
         <p className="text-xs text-slate-700">v2.0.0 · Data stored per-account in your browser · Signed in with Google</p>
+        <p className="text-xs">
+          <Link to="/privacy" className="text-cyan-500 hover:text-cyan-400 underline">Privacy Policy</Link>
+        </p>
       </div>
     </div>
   )

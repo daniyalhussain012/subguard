@@ -3,6 +3,8 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Subscription = require('../models/Subscription');
+const PushSubscription = require('../models/PushSubscription');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
@@ -74,4 +76,18 @@ router.get('/me', authMiddleware, async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 router.post('/logout', (req, res) => res.json({ message: 'Logged out' }));
+
+// Permanently deletes the user's account and all associated data
+// (subscriptions, push registration) — required by Apple/Google account
+// deletion policies for apps that support account creation.
+router.delete('/me', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await Subscription.deleteMany({ user: userId });
+    await PushSubscription.deleteOne({ user: userId });
+    await User.findByIdAndDelete(userId);
+    res.json({ message: 'Account deleted' });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
 module.exports = router;

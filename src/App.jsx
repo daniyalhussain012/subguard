@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext, useCallback, lazy, Suspense, useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { v4 as uuidv4 } from 'uuid'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
 import { defaultSettings } from './utils/storage'
@@ -8,6 +9,7 @@ import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1, s
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallback'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Subscriptions = lazy(() => import('./pages/Subscriptions'))
@@ -87,6 +89,7 @@ function AnimatedRoutes() {
           <Routes location={location}>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
               <Route path="subscriptions" element={<Subscriptions />} />
@@ -142,8 +145,14 @@ function AppInner() {
   const [dismissedAlerts, setDismissedAlerts] = useState([])
   const [cancellations, setCancellations] = useState([])
   const [showOnboarding, setShowOnboarding] = useState(false)
+  // Gates the server-sync effect until we've either confirmed local data exists
+  // or restored it from the server — prevents a fresh domain/device from
+  // syncing an empty subscriptions array and wiping the server's copy.
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
+    setHydrated(false)
+
     // First visit: initialize empty state for this user (no sample data — keeps accounts isolated)
     if (!localStorage.getItem(activeKeys.FIRST_VISIT)) {
       localStorage.setItem(activeKeys.SUBSCRIPTIONS,    JSON.stringify([]))
@@ -157,6 +166,46 @@ function AppInner() {
     }
 
     loadAll(activeKeys)
+
+    // Restore-from-server hydration: if this domain/device has no local
+    // subscriptions but the user is logged in, pull the server's copy before
+    // the sync effect below gets a chance to run (it would otherwise push an
+    // empty array and wipe the server's data — e.g. after switching domains).
+    const localSubs = JSON.parse(localStorage.getItem(activeKeys.SUBSCRIPTIONS) || '[]')
+    const token = localStorage.getItem('subguard_token')
+    if (localSubs.length === 0 && token) {
+      fetch(`${API_URL}/api/subscriptions`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(serverSubs => {
+          if (Array.isArray(serverSubs) && serverSubs.length) {
+            const restored = serverSubs.map(s => ({
+              id: uuidv4(),
+              name: s.name,
+              category: s.category || 'Other',
+              amount: s.amount,
+              currency: s.currency || 'USD',
+              billingCycle: s.billingCycle || 'Monthly',
+              nextBillingDate: s.nextBillingDate ? s.nextBillingDate.slice(0, 10) : '',
+              autoRenewal: true,
+              paymentMethod: '',
+              notes: s.notes || '',
+              status: 'Active',
+              createdAt: s.createdAt || new Date().toISOString(),
+              updatedAt: s.updatedAt || new Date().toISOString(),
+            }))
+            localStorage.setItem(activeKeys.SUBSCRIPTIONS, JSON.stringify(restored))
+            setSubscriptions(restored)
+          }
+          setHydrated(true)
+        })
+        .catch(() => {
+          // Leave hydrated=false — sync effect stays disabled this session
+          // rather than risk overwriting server data with an empty array.
+        })
+    } else {
+      setHydrated(true)
+    }
+
     registerServiceWorker().then(() => {
       // Re-register this device for background push whenever permission is
       // already granted — keeps the server's copy fresh (e.g. after key rotation)
@@ -205,7 +254,7 @@ function AppInner() {
   // Mirror subscriptions to the server (debounced) so background push
   // reminders work even when the app is closed. Fire-and-forget.
   useEffect(() => {
-    if (!userId) return
+    if (!userId || !hydrated) return
     const token = localStorage.getItem('subguard_token')
     if (!token) return
     const t = setTimeout(() => {
@@ -216,7 +265,7 @@ function AppInner() {
       }).catch(() => {})
     }, 2000)
     return () => clearTimeout(t)
-  }, [subscriptions, userId])
+  }, [subscriptions, userId, hydrated])
 
   function getNotificationTitle() {
     const urgent = subscriptions.filter(s => {

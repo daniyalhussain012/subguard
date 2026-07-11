@@ -52,6 +52,19 @@ export function AuthProvider({ children }) {
     window.location.href = '/login';
   };
 
+  const deleteAccount = async () => {
+    if (!token) return { ok: false };
+    try {
+      const r = await fetch(`${API_URL}/auth/me`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) return { ok: false };
+      localStorage.removeItem('subguard_token');
+      return { ok: true };
+    } catch { return { ok: false }; }
+  };
+
   const refreshUser = async () => {
     if (!token) return;
     try {
@@ -63,7 +76,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, token, loading: false,
-      loginWithGoogle, handleAuthCallback, logout, refreshUser,
+      loginWithGoogle, handleAuthCallback, logout, refreshUser, deleteAccount,
       isAuthenticated: !!user,
       isPremium: user?.plan === 'premium',
     }}>
