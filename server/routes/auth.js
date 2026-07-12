@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const PushSubscription = require('../models/PushSubscription');
 const authMiddleware = require('../middleware/auth');
+const { notifyAdmin } = require('../notify');
 const router = express.Router();
 
 // Log presence only — never fragments of the actual values
@@ -30,6 +31,7 @@ passport.use(new GoogleStrategy({
         name: profile.displayName,
         avatar: profile.photos[0]?.value,
       });
+      notifyAdmin('🎉 New RenewBell signup', `${profile.displayName} <${profile.emails[0].value}> just signed up.`);
     }
     done(null, user);
   } catch (err) { done(err, null); }

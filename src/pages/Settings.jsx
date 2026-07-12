@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle, Zap, Crown } from 'lucide-react'
+import { Settings as SettingsIcon, Bell, User, Palette, Database, ToggleLeft, ToggleRight, Download, Upload, Trash2, Sun, Moon, ShieldCheck, Smartphone, CheckCircle, XCircle, AlertCircle, Zap, Crown, MessageSquare } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../App'
 import { useAuth } from '../contexts/AuthContext'
@@ -41,6 +41,8 @@ function Section({ icon: Icon, title, children }) {
   )
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com'
+
 const CURRENCIES = [
   { code: 'USD', label: '$ US Dollar' },
   { code: 'EUR', label: '€ Euro' },
@@ -60,6 +62,9 @@ export default function Settings() {
   const [importError, setImportError] = useState('')
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteAccountError, setDeleteAccountError] = useState('')
+  const [feedbackText, setFeedbackText] = useState('')
+  const [feedbackSending, setFeedbackSending] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState(false)
   const [installPrompt, setInstallPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [pushSubscribed, setPushSubscribed] = useState(false)
@@ -158,6 +163,24 @@ export default function Settings() {
     if (!window.confirm('This cannot be undone. Delete everything?')) return
     Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
+  }
+
+  async function handleSendFeedback() {
+    if (!feedbackText.trim()) return
+    setFeedbackSending(true)
+    try {
+      const r = await fetch(`${API_URL}/api/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
+        body: JSON.stringify({ message: feedbackText.trim() }),
+      })
+      if (r.ok) {
+        setFeedbackSent(true)
+        setFeedbackText('')
+        setTimeout(() => setFeedbackSent(false), 3000)
+      }
+    } catch {}
+    setFeedbackSending(false)
   }
 
   async function handleDeleteAccount() {
@@ -386,6 +409,28 @@ export default function Settings() {
           </button>
         </div>
       </Section>
+
+      {isPremium && (
+        <Section icon={MessageSquare} title="Feedback">
+          <p className="text-xs text-slate-500 mb-3">
+            As a Pro member, your feedback goes straight to the founder. Feature requests, bugs, ideas — we read everything.
+          </p>
+          <textarea
+            className="input min-h-[90px] resize-none text-sm"
+            placeholder="What should we build or fix next?"
+            value={feedbackText}
+            onChange={e => setFeedbackText(e.target.value)}
+            maxLength={2000}
+          />
+          <button
+            onClick={handleSendFeedback}
+            disabled={!feedbackText.trim() || feedbackSending}
+            className="btn-primary w-full justify-center mt-2 disabled:opacity-40"
+          >
+            {feedbackSent ? <><CheckCircle size={14} /> Sent — thank you!</> : feedbackSending ? 'Sending…' : <><MessageSquare size={14} /> Send Feedback</>}
+          </button>
+        </Section>
+      )}
 
       <Section icon={AlertCircle} title="Danger Zone">
         <p className="text-xs text-slate-500 mb-3">

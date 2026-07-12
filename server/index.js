@@ -11,7 +11,9 @@ const User = require('./models/User');
 const Subscription = require('./models/Subscription');
 const PushSubscription = require('./models/PushSubscription');
 const EmailToken = require('./models/EmailToken');
+const Feedback = require('./models/Feedback');
 const authMiddleware = require('./middleware/auth');
+const { notifyAdmin } = require('./notify');
 const gmail = require('./gmail');
 const outlook = require('./outlook');
 
@@ -48,12 +50,13 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     if (metadata?.userId) {
       const expiresAt = new Date();
       expiresAt.setFullYear(expiresAt.getFullYear() + 5);
-      await User.findByIdAndUpdate(metadata.userId, {
+      const user = await User.findByIdAndUpdate(metadata.userId, {
         plan: 'premium',
         stripeSessionId: id,
         premiumActivatedAt: new Date(),
         premiumExpiresAt: expiresAt,
-      });
+      }, { new: true });
+      notifyAdmin('💰 New RenewBell Pro purchase ($10)', `${user?.name || 'Unknown'} <${user?.email || metadata.userId}> upgraded to Pro (5-year access).`);
     }
   }
   res.json({ received: true });
@@ -162,6 +165,20 @@ function registerScanProvider(name, provider, mod) {
 
 registerScanProvider('google', 'gmail', gmail);
 registerScanProvider('microsoft', 'outlook', outlook);
+
+// ── Feedback ──────────────────────────────────────────────────────────────────
+app.post('/api/feedback', authMiddleware, async (req, res) => {
+  try {
+    const message = (req.body.message || '').toString().trim().slice(0, 2000);
+    if (!message) return res.status(400).json({ error: 'Message required' });
+    await Feedback.create({ user: req.user._id, email: req.user.email, plan: req.user.plan, message });
+    notifyAdmin(
+      '💬 New RenewBell feedback',
+      `From: ${req.user.name || 'Unknown'} <${req.user.email}> (${req.user.plan})\n\n${message}`
+    );
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
