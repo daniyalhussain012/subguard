@@ -206,7 +206,7 @@ export default function Settings() {
         </div>
         {!isPremium && (
           <button onClick={() => navigate('/upgrade')} className="btn-primary w-full justify-center text-sm mb-2">
-            <Zap size={14} /> Upgrade to Pro — $5 one-time
+            <Zap size={14} /> Upgrade to Pro — $10 one-time
           </button>
         )}
         <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20">

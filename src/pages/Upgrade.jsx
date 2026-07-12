@@ -148,7 +148,7 @@ export default function Upgrade() {
             <h2 className="font-bold text-cyan-300">Pro</h2>
           </div>
           <div className="flex items-end gap-1.5 mb-0.5">
-            <span className="text-3xl font-bold text-slate-100">$5</span>
+            <span className="text-3xl font-bold text-slate-100">$10</span>
             <span className="text-slate-400 text-sm mb-1">one-time</span>
           </div>
           <p className="text-[11px] text-slate-600 mb-4">Pay once, 5 years of access. No recurring charges.</p>
@@ -162,7 +162,7 @@ export default function Upgrade() {
           {error && <p className="text-xs text-red-400 mb-2 text-center">{error}</p>}
           <button onClick={handleUpgrade} disabled={loading} className="btn-primary w-full justify-center py-2.5 text-sm font-bold">
             <Zap size={15} />
-            {loading ? 'Opening checkout…' : 'Upgrade for $5'}
+            {loading ? 'Opening checkout…' : 'Upgrade for $10'}
           </button>
           <p className="text-[10px] text-slate-600 text-center mt-2 flex items-center justify-center gap-1">
             <Star size={10} className="text-slate-600" /> Secure checkout via Stripe

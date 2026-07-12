@@ -82,7 +82,7 @@ export default function LoginPage() {
                 {[
                   'Track all your subscriptions in one place',
                   "Get renewal reminders before you're charged",
-                  'Free up to 5 subscriptions · Pro $5 one-time',
+                  'Free up to 5 subscriptions · Pro $10 one-time',
                 ].map(f => (
                   <div key={f} className="flex items-center gap-2 text-xs text-slate-500">
                     <div className="w-1 h-1 rounded-full bg-cyan-500 shrink-0" />

@@ -21,7 +21,7 @@ const createSession = async (email, userId, frontendUrl) => {
           name: 'RenewBell Pro — 5-Year Access',
           description: 'Unlimited subscriptions, all features, 5 years of access. One-time payment.',
         },
-        unit_amount: 500,
+        unit_amount: 1000,
       },
       quantity: 1,
     }],

@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
@@ -8,10 +9,11 @@ const PushSubscription = require('../models/PushSubscription');
 const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
-console.log('[Auth] Initializing Google Strategy');
-console.log('[Auth] GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.slice(0, 20) + '...' : 'MISSING');
-console.log('[Auth] GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '****' + process.env.GOOGLE_CLIENT_SECRET.slice(-4) : 'MISSING');
-console.log('[Auth] GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI || 'MISSING');
+// Log presence only — never fragments of the actual values
+console.log('[Auth] Google Strategy config:',
+  process.env.GOOGLE_CLIENT_ID ? 'client id set' : 'CLIENT_ID MISSING',
+  process.env.GOOGLE_CLIENT_SECRET ? '· secret set' : '· CLIENT_SECRET MISSING',
+  process.env.GOOGLE_REDIRECT_URI ? '· redirect set' : '· REDIRECT_URI MISSING');
 
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
@@ -60,9 +62,36 @@ router.get('/login/google/callback', (req, res, next) => {
       return res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
     }
     console.log('[Auth] Success! User:', user.email);
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-    return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}`);
+    // Don't put the long-lived JWT in the URL (it leaks via history, Referer,
+    // and access logs). Redirect with a 60-second single-use code instead;
+    // the SPA immediately exchanges it via POST for the real token.
+    const code = jwt.sign(
+      { userId: user._id, otc: true, jti: crypto.randomUUID() },
+      process.env.JWT_SECRET,
+      { expiresIn: '60s' }
+    );
+    return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?code=${code}`);
   })(req, res, next);
+});
+
+// Single-use tracking for exchange codes. In-memory is fine: codes live 60s
+// and this runs as a single instance; a restart inside that window only means
+// a code could be replayed for its remaining seconds.
+const usedCodes = new Map(); // jti -> expiry ms
+setInterval(() => {
+  const now = Date.now();
+  for (const [jti, exp] of usedCodes) if (exp < now) usedCodes.delete(jti);
+}, 60000).unref();
+
+router.post('/exchange', async (req, res) => {
+  try {
+    const payload = jwt.verify(req.body.code, process.env.JWT_SECRET);
+    if (!payload.otc || !payload.jti) return res.status(400).json({ error: 'Invalid code' });
+    if (usedCodes.has(payload.jti)) return res.status(400).json({ error: 'Code already used' });
+    usedCodes.set(payload.jti, Date.now() + 120000);
+    const token = jwt.sign({ userId: payload.userId }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token });
+  } catch { res.status(400).json({ error: 'Invalid or expired code' }); }
 });
 
 router.get('/me', authMiddleware, async (req, res) => {

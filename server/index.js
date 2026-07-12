@@ -29,7 +29,9 @@ const ALLOWED_ORIGINS = [...new Set([
   'http://localhost:5173',
 ])];
 app.use(cors({
-  origin: (origin, cb) => cb(null, !origin || ALLOWED_ORIGINS.includes(origin)),
+  // Strict allowlist only — no !origin escape hatch. Non-browser clients
+  // (curl, health checks) don't need CORS headers to succeed anyway.
+  origin: (origin, cb) => cb(null, ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
 }));
 
@@ -59,7 +61,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(session({ secret: process.env.SESSION_SECRET || 'subguard-secret', resave: false, saveUninitialized: false }));
+// Never fall back to a secret that's public in the repo. If the env var is
+// missing, use a random per-boot secret (sessions only span the seconds-long
+// OAuth handshake, so losing them on restart is harmless) and log loudly.
+const sessionSecret = process.env.SESSION_SECRET || (() => {
+  console.warn('[Startup] SESSION_SECRET not set — using a random per-boot secret. Set it in the environment.');
+  return require('crypto').randomBytes(32).toString('hex');
+})();
+app.use(session({ secret: sessionSecret, resave: false, saveUninitialized: false }));
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -98,12 +107,16 @@ app.get('/api/status', authMiddleware, async (req, res) => {
 
 function registerScanProvider(name, provider, mod) {
   // name: URL segment for OAuth routes (google/microsoft); provider: gmail/outlook
-  app.get(`/auth/${name}`, (req, res) => {
+  app.get(`/auth/${name}`, async (req, res) => {
     if (!mod.isConfigured()) return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_not_configured`);
-    let userId;
-    try { userId = userIdFromQueryToken(req); }
-    catch { return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_auth`); }
-    res.redirect(mod.getAuthUrl(signScanState(userId, provider)));
+    let user;
+    try {
+      user = authMiddleware.applyAdminOverride(await User.findById(userIdFromQueryToken(req)));
+      if (!user) throw new Error('no user');
+    } catch { return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_auth`); }
+    // Email scanning is a premium feature — enforce it where the value lives
+    if (user.plan !== 'premium') return res.redirect(`${FRONTEND_URL}/upgrade`);
+    res.redirect(mod.getAuthUrl(signScanState(user._id, provider)));
   });
 
   app.get(`/auth/${name}/callback`, async (req, res) => {
@@ -126,6 +139,7 @@ function registerScanProvider(name, provider, mod) {
 
   app.post(`/api/scan-${provider}`, authMiddleware, async (req, res) => {
     try {
+      if (req.user.plan !== 'premium') return res.status(403).json({ ok: false, error: 'Email scanning requires Premium' });
       const doc = await EmailToken.findOne({ user: req.user._id, provider });
       if (!doc) return res.status(400).json({ ok: false, error: `Not connected to ${provider}` });
       const scan = provider === 'gmail' ? mod.scanGmail : mod.scanOutlook;

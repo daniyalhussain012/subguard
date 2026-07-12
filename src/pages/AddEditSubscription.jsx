@@ -50,10 +50,12 @@ function Toggle({ value, onChange }) {
   )
 }
 
+const FREE_LIMIT = 5
+
 export default function AddEditSubscription() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { subscriptions, addSubscription, updateSubscription, deleteSubscription, reminders, addReminder, deleteReminder, household, darkMode } = useApp()
+  const { subscriptions, addSubscription, updateSubscription, deleteSubscription, reminders, addReminder, deleteReminder, household, darkMode, isPremium } = useApp()
 
   const [form, setForm] = useState(EMPTY)
   const [reminderEnabled, setReminderEnabled] = useState(false)
@@ -61,6 +63,7 @@ export default function AddEditSubscription() {
   const [errors, setErrors] = useState({})
   const [saved, setSaved] = useState(false)
   const isEditing = Boolean(id)
+  const atFreeLimit = !isEditing && !isPremium && subscriptions.length >= FREE_LIMIT
 
   useEffect(() => {
     // Pre-fill from Smart Scanner
@@ -98,6 +101,7 @@ export default function AddEditSubscription() {
 
   function handleSubmit(e) {
     e.preventDefault()
+    if (atFreeLimit) { navigate('/upgrade'); return }
     if (!validate()) return
     const now = new Date().toISOString()
     const sub = {
@@ -133,6 +137,27 @@ export default function AddEditSubscription() {
 
   const monthly = form.amount && !isNaN(parseFloat(form.amount))
     ? getMonthlyAmount({ ...form, amount: parseFloat(form.amount) }) : 0
+
+  if (atFreeLimit) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => navigate(-1)} className="btn-icon"><ArrowLeft size={19} /></button>
+          <h1 className="page-header mb-0">Add Subscription</h1>
+        </div>
+        <div className="card p-8 text-center space-y-4 border-amber-500/30">
+          <div className="text-4xl">🔒</div>
+          <h2 className="font-bold text-slate-100">You've reached the free limit of {FREE_LIMIT} subscriptions</h2>
+          <p className="text-sm text-slate-400">
+            Upgrade to Pro to track unlimited subscriptions, plus email scanning, money-leak detection, and more — $10 one-time for 5 years.
+          </p>
+          <button onClick={() => navigate('/upgrade')} className="btn-primary justify-center mx-auto">
+            Upgrade to Pro
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-2xl mx-auto">

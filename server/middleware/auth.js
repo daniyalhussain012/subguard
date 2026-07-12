@@ -1,5 +1,20 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+
+// Admin accounts get premium without payment. Configured ONLY via the
+// ADMIN_EMAILS env var (comma-separated) — no emails hardcoded in source.
+function isAdminEmail(email) {
+  if (!email) return false;
+  const admins = (process.env.ADMIN_EMAILS || '')
+    .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+  return admins.includes(email.toLowerCase());
+}
+
+function applyAdminOverride(user) {
+  if (user && isAdminEmail(user.email)) user.plan = 'premium';
+  return user;
+}
+
 module.exports = async (req, res, next) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
@@ -7,13 +22,10 @@ module.exports = async (req, res, next) => {
     const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
     if (!user) return res.status(401).json({ error: 'User not found' });
-    // Admin accounts get full premium access without payment
-    const admins = (process.env.ADMIN_EMAILS || 'daniyalhussain829@gmail.com,daniyalhussain987@hotmail.com')
-      .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-    if (user.email && admins.includes(user.email.toLowerCase())) {
-      user.plan = 'premium';
-    }
-    req.user = user;
+    req.user = applyAdminOverride(user);
     next();
   } catch { res.status(401).json({ error: 'Invalid token' }); }
 };
+
+module.exports.isAdminEmail = isAdminEmail;
+module.exports.applyAdminOverride = applyAdminOverride;

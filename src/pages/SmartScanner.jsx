@@ -187,7 +187,7 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
         >
           {scanning ? <><RotateCcw size={14} className="animate-spin" /> Scanning inbox...</> : <><RefreshCw size={14} /> Scan {label}</>}
         </button>
-        <p className="text-xs text-slate-600 text-center">Read-only · No emails stored · Disconnect anytime</p>
+        <p className="text-xs text-slate-600 text-center">Read-only · Only detected subscription details are stored, never your emails · Disconnect anytime</p>
       </div>
     )
   }
@@ -199,7 +199,7 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
         <h3 className="font-semibold text-slate-300">{label}</h3>
       </div>
       <p className="text-sm text-slate-400">
-        Automatically detect subscriptions from your {label} inbox. Read-only access — RenewBell never stores or shares your emails.
+        Automatically detect subscriptions from your {label} inbox. Read-only access — we save only the subscription details we detect (service, price, renewal date), never your emails.
       </p>
       <a href={connectUrl} className="btn-primary w-full justify-center">
         <ExternalLink size={14} /> Connect {label}
@@ -210,7 +210,7 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
           <p>This is normal for apps pending Google review. Click <strong className="text-slate-300">Advanced</strong> → <strong className="text-slate-300">"Go to app (unsafe)"</strong> to continue. Your emails are never stored.</p>
         </div>
       )}
-      <p className="text-xs text-slate-600 text-center">Read-only · No emails stored · Disconnect anytime</p>
+      <p className="text-xs text-slate-600 text-center">Read-only · Only detected subscription details are stored, never your emails · Disconnect anytime</p>
     </div>
   )
 }
@@ -385,7 +385,10 @@ export default function SmartScanner() {
       try {
         const arrayBuffer = await file.arrayBuffer()
         const pdfjsLib = await import('pdfjs-dist')
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+        // Serve the worker from our own origin (Vite bundles it) — no
+        // third-party CDN dependency at runtime
+        const worker = await import('pdfjs-dist/build/pdf.worker.min.mjs?url')
+        pdfjsLib.GlobalWorkerOptions.workerSrc = worker.default
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
         let fullText = ''
         for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
