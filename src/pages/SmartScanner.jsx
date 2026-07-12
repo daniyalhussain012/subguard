@@ -13,6 +13,9 @@ import { CATEGORIES, getMonthlyAmount, formatCurrency } from '../utils/storage'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
+// Scanner endpoints are per-user — every call carries the app JWT
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` })
+
 const KNOWN_SERVICES = [
   'Netflix', 'Spotify', 'Hulu', 'Disney+', 'HBO Max', 'Peacock', 'Paramount+', 'ESPN+',
   'YouTube Premium', 'Amazon Prime', 'Apple TV+', 'Apple Music', 'Apple One', 'Tidal',
@@ -103,7 +106,9 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
   const isGmail = provider === 'gmail'
   const label = isGmail ? 'Gmail' : 'Outlook / Hotmail'
   const icon = isGmail ? '📧' : '📨'
-  const connectUrl = `${API}/auth/${isGmail ? 'google' : 'microsoft'}`
+  // Browser navigation can't send an Authorization header, so the JWT rides
+  // along as a query param; the server swaps it for a short-lived OAuth state
+  const connectUrl = `${API}/auth/${isGmail ? 'google' : 'microsoft'}?token=${encodeURIComponent(localStorage.getItem('subguard_token') || '')}`
   const [showSetup, setShowSetup] = useState(false)
 
   if (!status.configured) {
@@ -309,7 +314,7 @@ export default function SmartScanner() {
 
   async function checkBackend() {
     try {
-      const res = await fetch(`${API}/api/status`, { signal: AbortSignal.timeout(2000) })
+      const res = await fetch(`${API}/api/status`, { headers: authHeaders(), signal: AbortSignal.timeout(2000) })
       if (res.ok) {
         const data = await res.json()
         setBackendAvailable(true)
@@ -326,7 +331,7 @@ export default function SmartScanner() {
     setScanResults([])
     try {
       const endpoint = provider === 'gmail' ? '/api/scan-gmail' : '/api/scan-outlook'
-      const res = await fetch(`${API}${endpoint}`, { method: 'POST' })
+      const res = await fetch(`${API}${endpoint}`, { method: 'POST', headers: authHeaders() })
       const data = await res.json()
       if (data.ok) {
         setScanResults(data.results || [])
@@ -339,7 +344,7 @@ export default function SmartScanner() {
 
   async function handleDisconnect(provider) {
     try {
-      await fetch(`${API}/api/disconnect-${provider}`, { method: 'POST' })
+      await fetch(`${API}/api/disconnect-${provider}`, { method: 'POST', headers: authHeaders() })
       checkBackend()
       setScanResults([])
     } catch {}

@@ -25,21 +25,21 @@ function createOAuth2Client() {
   )
 }
 
-// Stored in-memory (per session) — in production use a DB
-let gmailTokens = null
-let gmailUserEmail = null
+// Stateless: tokens live per-user in MongoDB (EmailToken model); every
+// function takes the caller's tokens rather than sharing module globals.
 
 function isConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET &&
     process.env.GOOGLE_CLIENT_ID !== 'your_google_client_id_here')
 }
 
-function getAuthUrl() {
+function getAuthUrl(state) {
   const oauth2Client = createOAuth2Client()
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent',
+    state,
   })
 }
 
@@ -47,18 +47,20 @@ async function handleCallback(code) {
   const oauth2Client = createOAuth2Client()
   const { tokens } = await oauth2Client.getToken(code)
   oauth2Client.setCredentials(tokens)
-  gmailTokens = tokens
 
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
   const { data } = await oauth2.userinfo.get()
-  gmailUserEmail = data.email
-  return data.email
+  return { tokens, email: data.email }
 }
 
-async function scanGmail() {
-  if (!gmailTokens) throw new Error('Not connected to Gmail')
+async function scanGmail(tokens) {
+  if (!tokens) throw new Error('Not connected to Gmail')
   const oauth2Client = createOAuth2Client()
-  oauth2Client.setCredentials(gmailTokens)
+  oauth2Client.setCredentials(tokens)
+  // googleapis refreshes expired access tokens automatically (via the stored
+  // refresh_token); capture the refreshed set so the caller can persist it
+  let updatedTokens = null
+  oauth2Client.on('tokens', (t) => { updatedTokens = { ...tokens, ...t } })
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
 
   const sixMonthsAgo = new Date()
@@ -105,20 +107,7 @@ async function scanGmail() {
     }
   }
 
-  return results
+  return { results, updatedTokens }
 }
 
-function disconnect() {
-  gmailTokens = null
-  gmailUserEmail = null
-}
-
-function getStatus() {
-  return {
-    connected: !!gmailTokens,
-    email: gmailUserEmail,
-    configured: isConfigured(),
-  }
-}
-
-module.exports = { isConfigured, getAuthUrl, handleCallback, scanGmail, disconnect, getStatus }
+module.exports = { isConfigured, getAuthUrl, handleCallback, scanGmail }

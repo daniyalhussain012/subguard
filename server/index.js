@@ -5,10 +5,13 @@ const session = require('express-session');
 const passport = require('passport');
 const cron = require('node-cron');
 const webpush = require('web-push');
+const jwt = require('jsonwebtoken');
 const connectDB = require('./db');
 const User = require('./models/User');
 const Subscription = require('./models/Subscription');
 const PushSubscription = require('./models/PushSubscription');
+const EmailToken = require('./models/EmailToken');
+const authMiddleware = require('./middleware/auth');
 const gmail = require('./gmail');
 const outlook = require('./outlook');
 
@@ -66,62 +69,85 @@ app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/stripe', require('./routes/stripe'));
 app.use('/api', require('./routes/push'));
 
-// ── Email scanning status ─────────────────────────────────────────────────────
-app.get('/api/status', (req, res) => {
-  res.json({ ok: true, gmail: gmail.getStatus(), outlook: outlook.getStatus() });
-});
+// ── Email scanning (per-user tokens in MongoDB) ───────────────────────────────
+// Connect flow: the browser navigates to /auth/<provider>?token=<app JWT>
+// (navigations can't carry Authorization headers), we swap it for a short-lived
+// signed `state`, and the OAuth callback maps state → user to store tokens.
 
-// ── Gmail email scanning ──────────────────────────────────────────────────────
-app.get('/auth/google', (req, res) => {
-  if (!gmail.isConfigured()) return res.redirect(`${FRONTEND_URL}/scanner?error=gmail_not_configured`);
-  res.redirect(gmail.getAuthUrl());
-});
+const signScanState = (userId, provider) =>
+  jwt.sign({ uid: userId.toString(), scan: provider }, process.env.JWT_SECRET, { expiresIn: '15m' });
 
-app.get('/auth/google/callback', async (req, res) => {
-  const { code, error } = req.query;
-  if (error || !code) return res.redirect(`${FRONTEND_URL}/scanner?error=gmail_denied`);
+function verifyScanState(state, provider) {
+  const payload = jwt.verify(state, process.env.JWT_SECRET);
+  if (payload.scan !== provider) throw new Error('State/provider mismatch');
+  return payload.uid;
+}
+
+function userIdFromQueryToken(req) {
+  return jwt.verify(req.query.token, process.env.JWT_SECRET).userId;
+}
+
+app.get('/api/status', authMiddleware, async (req, res) => {
   try {
-    await gmail.handleCallback(code);
-    res.redirect(`${FRONTEND_URL}/scanner?connected=gmail`);
-  } catch (err) {
-    console.error('Gmail callback error:', err.message);
-    res.redirect(`${FRONTEND_URL}/scanner?error=gmail_failed`);
-  }
+    const docs = await EmailToken.find({ user: req.user._id });
+    const doc = p => docs.find(d => d.provider === p);
+    const status = p => ({ configured: (p === 'gmail' ? gmail : outlook).isConfigured(), connected: !!doc(p), email: doc(p)?.email || null });
+    res.json({ ok: true, gmail: status('gmail'), outlook: status('outlook') });
+  } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
-app.post('/api/scan-gmail', async (req, res) => {
-  try { res.json({ ok: true, results: await gmail.scanGmail() }); }
-  catch (err) { res.status(400).json({ ok: false, error: err.message }); }
-});
+function registerScanProvider(name, provider, mod) {
+  // name: URL segment for OAuth routes (google/microsoft); provider: gmail/outlook
+  app.get(`/auth/${name}`, (req, res) => {
+    if (!mod.isConfigured()) return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_not_configured`);
+    let userId;
+    try { userId = userIdFromQueryToken(req); }
+    catch { return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_auth`); }
+    res.redirect(mod.getAuthUrl(signScanState(userId, provider)));
+  });
 
-app.get('/api/gmail-status', (req, res) => res.json(gmail.getStatus()));
-app.post('/api/disconnect-gmail', (req, res) => { gmail.disconnect(); res.json({ ok: true }); });
+  app.get(`/auth/${name}/callback`, async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error || !code) return res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_denied`);
+    try {
+      const userId = verifyScanState(state, provider);
+      const { tokens, email } = await mod.handleCallback(code);
+      await EmailToken.findOneAndUpdate(
+        { user: userId, provider },
+        { tokens, email },
+        { upsert: true }
+      );
+      res.redirect(`${FRONTEND_URL}/scanner?connected=${provider}`);
+    } catch (err) {
+      console.error(`${provider} callback error:`, err.message);
+      res.redirect(`${FRONTEND_URL}/scanner?error=${provider}_failed`);
+    }
+  });
 
-// ── Outlook email scanning ────────────────────────────────────────────────────
-app.get('/auth/microsoft', (req, res) => {
-  if (!outlook.isConfigured()) return res.redirect(`${FRONTEND_URL}/scanner?error=outlook_not_configured`);
-  res.redirect(outlook.getAuthUrl());
-});
+  app.post(`/api/scan-${provider}`, authMiddleware, async (req, res) => {
+    try {
+      const doc = await EmailToken.findOne({ user: req.user._id, provider });
+      if (!doc) return res.status(400).json({ ok: false, error: `Not connected to ${provider}` });
+      const scan = provider === 'gmail' ? mod.scanGmail : mod.scanOutlook;
+      const { results, updatedTokens } = await scan(doc.tokens);
+      if (updatedTokens) await EmailToken.updateOne({ _id: doc._id }, { tokens: updatedTokens });
+      res.json({ ok: true, results });
+    } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
+  });
 
-app.get('/auth/microsoft/callback', async (req, res) => {
-  const { code, error } = req.query;
-  if (error || !code) return res.redirect(`${FRONTEND_URL}/scanner?error=outlook_denied`);
-  try {
-    await outlook.handleCallback(code);
-    res.redirect(`${FRONTEND_URL}/scanner?connected=outlook`);
-  } catch (err) {
-    console.error('Outlook callback error:', err.message);
-    res.redirect(`${FRONTEND_URL}/scanner?error=outlook_failed`);
-  }
-});
+  app.get(`/api/${provider}-status`, authMiddleware, async (req, res) => {
+    const doc = await EmailToken.findOne({ user: req.user._id, provider });
+    res.json({ configured: mod.isConfigured(), connected: !!doc, email: doc?.email || null });
+  });
 
-app.post('/api/scan-outlook', async (req, res) => {
-  try { res.json({ ok: true, results: await outlook.scanOutlook() }); }
-  catch (err) { res.status(400).json({ ok: false, error: err.message }); }
-});
+  app.post(`/api/disconnect-${provider}`, authMiddleware, async (req, res) => {
+    await EmailToken.deleteOne({ user: req.user._id, provider });
+    res.json({ ok: true });
+  });
+}
 
-app.get('/api/outlook-status', (req, res) => res.json(outlook.getStatus()));
-app.post('/api/disconnect-outlook', (req, res) => { outlook.disconnect(); res.json({ ok: true }); });
+registerScanProvider('google', 'gmail', gmail);
+registerScanProvider('microsoft', 'outlook', outlook);
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
