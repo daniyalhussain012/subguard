@@ -1,6 +1,6 @@
 # Email Scanning Setup
 
-SubGuard can scan your Gmail and Outlook inbox to automatically detect subscriptions.
+RenewBell can scan your Gmail and Outlook inbox to automatically detect subscriptions.
 Both integrations require free OAuth credentials from Google/Microsoft — your emails never leave your device or their servers.
 
 ---
@@ -10,7 +10,7 @@ Both integrations require free OAuth credentials from Google/Microsoft — your 
 ### 1. Create a Google Cloud Project
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Click **New Project** → name it "SubGuard"
+2. Click **New Project** → name it "RenewBell"
 3. Select the project
 
 ### 2. Enable Gmail API
@@ -22,7 +22,7 @@ Both integrations require free OAuth credentials from Google/Microsoft — your 
 
 1. Go to **APIs & Services → OAuth consent screen**
 2. Choose **External** → Create
-3. Fill in App name: `SubGuard`, User support email, Developer email
+3. Fill in App name: `RenewBell`, User support email, Developer email
 4. Add scope: `https://www.googleapis.com/auth/gmail.readonly`
 5. Add your Gmail address as a **Test user**
 6. Save
@@ -31,7 +31,7 @@ Both integrations require free OAuth credentials from Google/Microsoft — your 
 
 1. Go to **APIs & Services → Credentials → Create Credentials → OAuth client ID**
 2. Application type: **Web application**
-3. Name: `SubGuard`
+3. Name: `RenewBell`
 4. Authorized redirect URIs: `http://localhost:3001/auth/google/callback`
 5. Click **Create** — copy the **Client ID** and **Client Secret**
 
@@ -51,7 +51,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3001/auth/google/callback
 
 1. Go to [portal.azure.com](https://portal.azure.com) → **Azure Active Directory → App registrations**
 2. Click **New registration**
-3. Name: `SubGuard`
+3. Name: `RenewBell`
 4. Supported account types: **Personal Microsoft accounts only**
 5. Redirect URI: Web → `http://localhost:3001/auth/microsoft/callback`
 6. Click **Register** — copy the **Application (client) ID**
@@ -59,7 +59,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3001/auth/google/callback
 ### 2. Create a Client Secret
 
 1. Go to **Certificates & secrets → New client secret**
-2. Description: `subguard`, Expires: 24 months
+2. Description: `renewbell`, Expires: 24 months
 3. Copy the **Value** immediately (shown only once)
 
 ### 3. Add API Permissions
@@ -103,5 +103,5 @@ The frontend will auto-detect whether the backend is running. If it's not runnin
 
 - OAuth tokens are stored **in memory only** — they are cleared when you restart the server.
 - Email content is processed locally — no data is sent to any third-party servers.
-- SubGuard only reads email **metadata** (subject, sender, snippet) — it never reads full email bodies.
+- RenewBell only reads email **metadata** (subject, sender, snippet) — it never reads full email bodies.
 - Scopes requested: `gmail.readonly` (Gmail) and `Mail.Read` (Outlook) — read-only, no write access.

@@ -1,58 +1,44 @@
-# SubGuard — Stop Getting Charged for Things You Forgot About
+# RenewBell — Never Miss a Renewal Again
 
-Free, privacy-first subscription tracker that runs entirely in your browser. No account required.
+Subscription tracker & reminder PWA. Track every recurring charge, get notified before renewals hit your card, and find step-by-step cancellation guides.
+
+**Live app:** https://subguard-five.vercel.app
 
 ## Features
 
-- **Automatic detection** — Connect Gmail or Outlook to scan your inbox for subscriptions
-- **Renewal Radar** — See every upcoming charge before it hits your card, with push notifications
-- **Smart Scanner** — Paste receipt text or upload screenshots; OCR extracts the details
-- **Price Compare** — Check if you're overpaying against fair market rates for 55+ services
-- **Cancellation Center** — Step-by-step cancellation guides for 76+ services
-- **Household Hub** — Track which family members use which subscriptions, split costs
-- **Savings Victory Board** — Celebrate every subscription you cancel
-- **PWA** — Install to your home screen, works offline
+- **Renewal reminders** — push notifications 7/2/1 days before each charge, even when the app is closed
+- **Billing calendar** — every upcoming charge projected across future months
+- **Smart Scanner** — paste receipt text or upload screenshots/PDFs; OCR extracts the details in your browser
+- **Email scanning** (Pro) — connect Gmail or Outlook to auto-detect subscriptions from receipts
+- **Money Leaks Detective** — spot zombie charges, price creep, and forgotten trials
+- **Price Compare** — check against fair market rates for 55+ services
+- **Cancellation Center** — step-by-step cancellation guides for 76+ services
+- **Household Hub** — track who uses what, split costs
+- **PWA** — install to your home screen, works offline
+
+## Pricing
+
+Free tier: up to 5 subscriptions. **Pro: $10 one-time** for 5 years — unlimited subscriptions, email scanning, and all premium features.
 
 ## Tech Stack
 
-- React 18 + Vite 5
-- Tailwind CSS 3
-- Framer Motion (animations)
-- Recharts (charts)
-- Tesseract.js (OCR for receipt images)
-- Express.js backend (optional, for Gmail/Outlook scanning)
-- Google Gmail API + Microsoft Graph API
+- React 18 + Vite + Tailwind CSS + Framer Motion
+- Tesseract.js (client-side OCR) + pdf.js
+- Express + MongoDB Atlas backend (auth, push notifications, subscription sync, Stripe billing)
+- Google OAuth sign-in · Web Push (VAPID) · Stripe Checkout
 
-## Quick Start
+## Development
 
 ```bash
 npm install
-npm run dev
+npm run dev        # frontend on http://localhost:5173
+npm run dev:all    # frontend + API backend together
 ```
 
-Open [http://localhost:5173](http://localhost:5173)
-
-## Email Scanning Setup (Optional)
-
-The email scanning feature requires OAuth credentials. See [SETUP_EMAIL.md](SETUP_EMAIL.md) for step-by-step instructions for Gmail and Outlook.
-
-Once configured:
-
-```bash
-npm run dev:all   # Runs frontend + email backend together
-```
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl/⌘ + N` | New subscription |
-| `Ctrl/⌘ + S` | Smart Scanner |
-| `Ctrl/⌘ + R` | Renewal Radar |
-| `Ctrl/⌘ + H` | Home |
+The backend (`/server`) needs a `.env` — see [SETUP_EMAIL.md](SETUP_EMAIL.md) for the email-scanning OAuth credentials.
 
 ## Privacy
 
-- All data stored in **localStorage** — nothing leaves your browser
-- Email scanning uses OAuth read-only access; email content is never stored
-- No analytics, no tracking, no accounts
+- Sign-in via Google OAuth; subscription data syncs to the server only to power push reminders
+- Email scanning is read-only and stores only detected subscription details (service, price, date) — never email content
+- Full policy: [/privacy](https://subguard-five.vercel.app/privacy) · in-app account deletion under Settings → Danger Zone
