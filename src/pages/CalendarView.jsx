@@ -7,7 +7,7 @@ import {
 } from 'date-fns'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { useApp } from '../App'
-import { getMonthlyAmount, formatCurrency, CATEGORY_COLORS, CATEGORY_ICONS } from '../utils/storage'
+import { getMonthlyAmount, getChargeDatesInRange, formatCurrency, CATEGORY_COLORS, CATEGORY_ICONS } from '../utils/storage'
 
 export default function CalendarView() {
   const { subscriptions, darkMode } = useApp()
@@ -18,22 +18,28 @@ export default function CalendarView() {
 
   const monthlyTotal = useMemo(() => active.reduce((s, sub) => s + getMonthlyAmount(sub), 0), [active])
 
-  const chargeMap = useMemo(() => {
-    const map = {}
-    active.forEach(sub => {
-      const key = sub.nextBillingDate?.slice(0, 10)
-      if (!key) return
-      if (!map[key]) map[key] = []
-      map[key].push(sub)
-    })
-    return map
-  }, [active])
-
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 })
     const end = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 })
     return eachDayOfInterval({ start, end })
   }, [currentMonth])
+
+  // Project recurring charges across the visible grid — auto-renewing subs
+  // appear every cycle (e.g. a monthly sub shows in every month), not just
+  // on their stored nextBillingDate.
+  const chargeMap = useMemo(() => {
+    const rangeStart = calendarDays[0]
+    const rangeEnd = calendarDays[calendarDays.length - 1]
+    const map = {}
+    active.forEach(sub => {
+      getChargeDatesInRange(sub, rangeStart, rangeEnd).forEach(d => {
+        const key = format(d, 'yyyy-MM-dd')
+        if (!map[key]) map[key] = []
+        map[key].push(sub)
+      })
+    })
+    return map
+  }, [active, calendarDays])
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -97,12 +103,13 @@ export default function CalendarView() {
 
       {/* Charges list */}
       <div>
-        <h2 className="section-title">All Upcoming Charges</h2>
-        {Object.keys(chargeMap).length === 0 ? (
-          <div className="card p-8 text-center text-slate-500 text-sm">No charges found. Add subscriptions to see them here.</div>
+        <h2 className="section-title">Charges in {format(currentMonth, 'MMMM yyyy')}</h2>
+        {Object.keys(chargeMap).filter(k => isSameMonth(parseISO(k), currentMonth)).length === 0 ? (
+          <div className="card p-8 text-center text-slate-500 text-sm">No charges this month. Add subscriptions to see them here.</div>
         ) : (
           <div className="space-y-2">
             {Object.entries(chargeMap)
+              .filter(([dateKey]) => isSameMonth(parseISO(dateKey), currentMonth))
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([dateKey, subs]) => (
                 <div key={dateKey} className="card p-4 flex items-start gap-4">

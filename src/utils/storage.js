@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid'
-import { format, addDays, differenceInDays } from 'date-fns'
+import { format, addDays, differenceInDays, addWeeks, addMonths, addYears, parseISO } from 'date-fns'
 
 // ─── Keys ──────────────────────────────────────────────────────────────────
 export const KEYS = {
@@ -214,6 +214,35 @@ export function getYearlyAmount(sub) {
     case 'Yearly': return sub.amount
     default: return sub.amount * 12
   }
+}
+
+// All charge dates for a subscription within [rangeStart, rangeEnd].
+// Auto-renewing subs repeat on their billing cycle indefinitely; non-renewing
+// subs charge exactly once, on nextBillingDate. Occurrences are computed as
+// offsets from the anchor date (not cumulatively) so month-end dates don't
+// drift (e.g. Jan 31 → Feb 28 → Mar 31, not Mar 28).
+export function getChargeDatesInRange(sub, rangeStart, rangeEnd) {
+  if (!sub.nextBillingDate) return []
+  const anchor = parseISO(sub.nextBillingDate.slice(0, 10))
+  if (isNaN(anchor.getTime())) return []
+
+  const renews = sub.autoRenewal !== false // older records lack the flag; renewal is the default
+  if (!renews) return anchor >= rangeStart && anchor <= rangeEnd ? [anchor] : []
+
+  const step = {
+    Weekly:    (i) => addWeeks(anchor, i),
+    Monthly:   (i) => addMonths(anchor, i),
+    Quarterly: (i) => addMonths(anchor, i * 3),
+    Yearly:    (i) => addYears(anchor, i),
+  }[sub.billingCycle] || ((i) => addMonths(anchor, i))
+
+  const dates = []
+  for (let i = 0; i < 1200; i++) { // cap: ~23 years of weekly charges
+    const d = step(i)
+    if (d > rangeEnd) break
+    if (d >= rangeStart) dates.push(d)
+  }
+  return dates
 }
 
 export function formatCurrency(amount, currency = 'USD') {
