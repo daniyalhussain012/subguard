@@ -20,7 +20,9 @@ async function notifyAdmin(subject, text) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'RenewBell <onboarding@resend.dev>',
+        // NOTIFY_FROM must be an address on a domain verified in the Resend
+        // account (resend.dev fallback only delivers to the account owner)
+        from: process.env.NOTIFY_FROM || 'RenewBell <onboarding@resend.dev>',
         to: [ADMIN_EMAIL],
         subject,
         text,
