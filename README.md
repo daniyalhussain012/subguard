@@ -18,7 +18,7 @@ Subscription tracker & reminder PWA. Track every recurring charge, get notified 
 
 ## Pricing
 
-Free tier: up to 5 subscriptions. **Pro: $10 one-time** for 5 years — unlimited subscriptions, email scanning, and all premium features.
+Free tier: up to 5 subscriptions. **Pro: $10 one-time** for 3 years — unlimited subscriptions, email scanning, and all premium features.
 
 ## Tech Stack
 

@@ -5,9 +5,9 @@ const router = express.Router();
 
 const getStripe = () => require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-function fiveYearsFromNow() {
+function threeYearsFromNow() {
   const d = new Date();
-  d.setFullYear(d.getFullYear() + 5);
+  d.setFullYear(d.getFullYear() + 3);
   return d;
 }
 
@@ -18,8 +18,8 @@ const createSession = async (email, userId, frontendUrl) => {
       price_data: {
         currency: 'usd',
         product_data: {
-          name: 'RenewBell Pro — 5-Year Access',
-          description: 'Unlimited subscriptions, all features, 5 years of access. One-time payment.',
+          name: 'RenewBell Pro — 3-Year Access',
+          description: 'Unlimited subscriptions, all features, 3 years of access. One-time payment.',
         },
         unit_amount: 1000,
       },
@@ -63,7 +63,7 @@ router.post('/verify-session', auth, async (req, res) => {
           plan: 'premium',
           stripeSessionId: session.id,
           premiumActivatedAt: new Date(),
-          premiumExpiresAt: fiveYearsFromNow(),
+          premiumExpiresAt: threeYearsFromNow(),
         },
         { new: true }
       );

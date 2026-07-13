@@ -48,7 +48,7 @@ FREE vs PRO
 
 Free: track up to 5 subscriptions with full renewal reminders — forever.
 
-Pro: unlimited subscriptions plus all premium features above, for a single one-time payment of $10. That's it. Five years of access, no recurring fees — because a subscription tracker that charges you monthly would be ironic.
+Pro: unlimited subscriptions plus all premium features above, for a single one-time payment of $10. That's it. Three years of access, no recurring fees — because a subscription tracker that charges you monthly would be ironic.
 
 ──────────────
 

@@ -49,14 +49,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     const { metadata, id } = event.data.object;
     if (metadata?.userId) {
       const expiresAt = new Date();
-      expiresAt.setFullYear(expiresAt.getFullYear() + 5);
+      expiresAt.setFullYear(expiresAt.getFullYear() + 3);
       const user = await User.findByIdAndUpdate(metadata.userId, {
         plan: 'premium',
         stripeSessionId: id,
         premiumActivatedAt: new Date(),
         premiumExpiresAt: expiresAt,
       }, { new: true });
-      notifyAdmin('💰 New RenewBell Pro purchase ($10)', `${user?.name || 'Unknown'} <${user?.email || metadata.userId}> upgraded to Pro (5-year access).`);
+      notifyAdmin('💰 New RenewBell Pro purchase ($10)', `${user?.name || 'Unknown'} <${user?.email || metadata.userId}> upgraded to Pro (3-year access).`);
     }
   }
   res.json({ received: true });
