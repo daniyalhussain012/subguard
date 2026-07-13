@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1024px; height: 500px; overflow: hidden; }
+  body {
+    font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
+    background: linear-gradient(135deg, #0F172A 0%, #14263E 55%, #0E3A47 100%);
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+  /* soft glow accents */
+  .glow { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .35; }
+  .glow.cyan { width: 420px; height: 420px; background: #06B6D4; right: -120px; top: -160px; }
+  .glow.deep { width: 380px; height: 380px; background: #0891B2; left: -140px; bottom: -200px; opacity: .22; }
+
+  .left {
+    width: 560px; padding-left: 64px; position: relative; z-index: 2;
+  }
+  .brand { display: flex; align-items: center; gap: 20px; margin-bottom: 22px; }
+  .brand svg { width: 92px; height: 92px; border-radius: 22px; box-shadow: 0 12px 40px rgba(6,182,212,.35); }
+  .wordmark { font-size: 58px; font-weight: 800; color: #F1F5F9; letter-spacing: -1px; }
+  .wordmark .bell { color: #22D3EE; }
+  .tagline { font-size: 30px; font-weight: 700; color: #E2E8F0; line-height: 1.25; margin-bottom: 14px; }
+  .sub { font-size: 20px; color: #94A3B8; font-weight: 500; }
+
+  .right { position: relative; z-index: 2; width: 400px; }
+  .card {
+    background: rgba(30, 41, 59, .92);
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 18px;
+    padding: 18px 22px;
+    margin: 12px 0;
+    display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    width: 356px;
+  }
+  .card.pop { transform: scale(1.06) translateX(-14px); border-color: rgba(34, 211, 238, .5); }
+  .dot { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .dot { font-weight: 800; font-family: 'Segoe UI', sans-serif; }
+  .d1 { background: rgba(239, 68, 68, .18); color: #F87171; }
+  .d2 { background: rgba(34, 211, 238, .16); color: #22D3EE; }
+  .d3 { background: rgba(245, 158, 11, .16); color: #FBBF24; }
+  .card .t { font-size: 17px; font-weight: 700; color: #F1F5F9; }
+  .card .s { font-size: 14.5px; color: #94A3B8; margin-top: 2px; }
+  .amt { margin-left: auto; font-size: 17px; font-weight: 800; color: #22D3EE; }
+</style>
+</head>
+<body>
+  <div class="glow cyan"></div>
+  <div class="glow deep"></div>
+
+  <div class="left">
+    <div class="brand">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+        <rect width="192" height="192" rx="36" fill="#0F172A"/>
+        <path d="M96 34c-7 0-12.5 5.5-12.5 12.5v3.5C61 56 46 76 46 100v26l-13 17v7h126v-7l-13-17v-26c0-24-15-44-37.5-50v-3.5C108.5 39.5 103 34 96 34z" fill="#06B6D4"/>
+        <path d="M80 156a16 16 0 0 0 32 0z" fill="#06B6D4"/>
+        <circle cx="141" cy="53" r="17" fill="#0F172A"/>
+        <circle cx="141" cy="53" r="12" fill="#F59E0B"/>
+      </svg>
+      <div class="wordmark">Renew<span class="bell">Bell</span></div>
+    </div>
+    <div class="tagline">Never miss a renewal again.</div>
+    <div class="sub">Track every subscription · Alerts before every charge</div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <div class="dot d1">N</div>
+      <div><div class="t">Netflix</div><div class="s">Renews in 7 days</div></div>
+      <div class="amt">$15.49</div>
+    </div>
+    <div class="card pop">
+      <div class="dot d2">
+        <svg width="24" height="24" viewBox="0 0 192 192"><path d="M96 34c-7 0-12.5 5.5-12.5 12.5v3.5C61 56 46 76 46 100v26l-13 17v7h126v-7l-13-17v-26c0-24-15-44-37.5-50v-3.5C108.5 39.5 103 34 96 34z" fill="#22D3EE"/><path d="M80 156a16 16 0 0 0 32 0z" fill="#22D3EE"/></svg>
+      </div>
+      <div><div class="t">Spotify renews tomorrow</div><div class="s">Keep it or cancel it?</div></div>
+    </div>
+    <div class="card">
+      <div class="dot d3">i</div>
+      <div><div class="t">iCloud+</div><div class="s">Renews in 14 days</div></div>
+      <div class="amt">$2.99</div>
+    </div>
+  </div>
+</body>
+</html>
