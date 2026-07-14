@@ -45,26 +45,28 @@ export const BILLING_CYCLES = ['Weekly', 'Monthly', 'Quarterly', 'Yearly']
 export const STATUSES = ['Active', 'Paused', 'Cancelled', 'Under Review']
 export const IMPORTANCE = ['Essential', 'Nice to Have', 'Can Live Without']
 
+// Every category gets a visually distinct hue — no near-duplicates
+// (the old palette had three purples, two reds, two blues, three grays)
 export const CATEGORY_COLORS = {
-  'Streaming': '#ef4444',
-  'Music': '#8b5cf6',
-  'Software': '#3b82f6',
-  'Gaming': '#f59e0b',
-  'Cloud Storage': '#06b6d4',
-  'Fitness': '#22c55e',
-  'News/Magazine': '#f97316',
-  'Food Delivery': '#ec4899',
-  'Shopping': '#84cc16',
-  'Subscription Box': '#a855f7',
-  'Recurring Donation': '#14b8a6',
-  'Installment Plan': '#64748b',
-  'Bank Fee': '#dc2626',
-  'App Store': '#2563eb',
-  'Membership': '#d97706',
-  'Utilities': '#475569',
-  'Insurance': '#0d9488',
-  'Phone/Internet': '#7c3aed',
-  'Other': '#6b7280',
+  'Streaming': '#ef4444',          // bright red
+  'Music': '#a855f7',              // purple
+  'Software': '#3b82f6',           // blue
+  'Gaming': '#f59e0b',             // amber
+  'Cloud Storage': '#06b6d4',      // cyan
+  'Fitness': '#22c55e',            // green
+  'News/Magazine': '#f97316',      // orange
+  'Food Delivery': '#ec4899',      // pink
+  'Shopping': '#84cc16',           // lime
+  'Subscription Box': '#d946ef',   // fuchsia
+  'Recurring Donation': '#10b981', // emerald
+  'Installment Plan': '#94a3b8',   // light slate
+  'Bank Fee': '#be123c',           // dark crimson
+  'App Store': '#6366f1',          // indigo
+  'Membership': '#eab308',         // yellow
+  'Utilities': '#78716c',          // warm stone
+  'Insurance': '#0284c7',          // deep sky
+  'Phone/Internet': '#7c3aed',     // violet
+  'Other': '#6b7280',              // neutral gray
 }
 
 export const CATEGORY_ICONS = {

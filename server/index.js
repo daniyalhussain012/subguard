@@ -19,6 +19,9 @@ const outlook = require('./outlook');
 
 const app = express();
 connectDB();
+// Drop stale indexes from the old one-device-per-user push design
+// (unique index on `user` alone would reject a second device).
+PushSubscription.syncIndexes().catch(err => console.error('[Startup] PushSubscription index sync failed:', err.message));
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.app').replace(/\/$/, '');
 
@@ -230,8 +233,8 @@ async function sendRenewalPushNotifications() {
         continue;
       }
 
-      const pushSub = await PushSubscription.findOne({ user: sub.user });
-      if (!pushSub) continue;
+      const devices = await PushSubscription.find({ user: sub.user });
+      if (!devices.length) continue;
 
       const payload = JSON.stringify({
         title: stage.title(sub),
@@ -243,21 +246,27 @@ async function sendRenewalPushNotifications() {
         stage: stage.days,
       });
 
-      try {
-        await webpush.sendNotification(pushSub.subscription, payload);
+      // Deliver to every registered device; drop only the devices that are gone
+      let deliveredToAny = false;
+      for (const device of devices) {
+        try {
+          await webpush.sendNotification(device.subscription, payload);
+          deliveredToAny = true;
+        } catch (err) {
+          if (err.statusCode === 410 || err.statusCode === 404) {
+            await PushSubscription.deleteOne({ _id: device._id });
+          } else {
+            console.error(`[Push Cron] Failed to send to user ${sub.user}:`, err.message);
+          }
+        }
+      }
+      if (deliveredToAny) {
         // Mark stage as sent for this billing date
         const prev = sub.notifsSent?.forDate === forDate ? sub.notifsSent : { forDate, s7: false, s2: false, s1: false };
         await Subscription.findByIdAndUpdate(sub._id, {
           notifsSent: { ...prev, forDate, [stage.key]: true },
         });
         sent++;
-      } catch (err) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          // Subscription gone from device — remove it
-          await PushSubscription.deleteOne({ user: sub.user });
-        } else {
-          console.error(`[Push Cron] Failed to send to user ${sub.user}:`, err.message);
-        }
       }
     }
   }

@@ -7,7 +7,7 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const PushSubscription = require('../models/PushSubscription');
 const authMiddleware = require('../middleware/auth');
-const { notifyAdmin } = require('../notify');
+const { notifyAdmin, sendEmail } = require('../notify');
 const router = express.Router();
 
 // Log presence only — never fragments of the actual values
@@ -84,6 +84,61 @@ setInterval(() => {
   const now = Date.now();
   for (const [jti, exp] of usedCodes) if (exp < now) usedCodes.delete(jti);
 }, 60000).unref();
+
+// ── Email (magic link) sign-in — for users without a Google account ─────────
+router.post('/email/start', async (req, res) => {
+  try {
+    const email = (req.body.email || '').toString().trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    const token = jwt.sign(
+      { email, magic: true, jti: crypto.randomUUID() },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    const base = (process.env.SERVER_URL || process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const link = `${base}/auth/email/verify?token=${token}`;
+    const ok = await sendEmail(
+      email,
+      'Your RenewBell sign-in link',
+      `Click to sign in to RenewBell (link is valid for 15 minutes):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
+      `<div style="font-family:sans-serif;max-width:480px">
+        <h2 style="color:#0F172A">Sign in to RenewBell</h2>
+        <p>Click the button below to sign in. This link is valid for <strong>15 minutes</strong> and can be used once.</p>
+        <p style="margin:24px 0"><a href="${link}" style="background:#06B6D4;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:bold">Sign in to RenewBell</a></p>
+        <p style="color:#64748B;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
+      </div>`
+    );
+    if (!ok) return res.status(503).json({ error: 'Could not send email right now. Please try again.' });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.get('/email/verify', async (req, res) => {
+  try {
+    const p = jwt.verify(req.query.token, process.env.JWT_SECRET);
+    if (!p.magic || !p.jti || usedCodes.has(p.jti)) throw new Error('invalid');
+    usedCodes.set(p.jti, Date.now() + 16 * 60000); // single-use
+    let user = await User.findOne({ email: p.email });
+    if (!user) {
+      user = await User.create({
+        // googleId is required+unique in the schema; email users get a
+        // deterministic placeholder so the constraint still holds
+        googleId: `email:${p.email}`,
+        email: p.email,
+        name: p.email.split('@')[0],
+      });
+      notifyAdmin('🎉 New RenewBell signup (email)', `${p.email} just signed up via email link.`);
+    }
+    const code = jwt.sign(
+      { userId: user._id, otc: true, jti: crypto.randomUUID() },
+      process.env.JWT_SECRET,
+      { expiresIn: '60s' }
+    );
+    return res.redirect(`${process.env.FRONTEND_URL}/auth/callback?code=${code}`);
+  } catch {
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=email_link_invalid`);
+  }
+});
 
 router.post('/exchange', async (req, res) => {
   try {

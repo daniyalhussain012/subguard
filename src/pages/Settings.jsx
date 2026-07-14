@@ -52,7 +52,7 @@ const CURRENCIES = [
 ]
 
 export default function Settings() {
-  const { settings, updateSettings, darkMode, setDarkMode, activeKeys } = useApp()
+  const { settings, updateSettings, darkMode, setDarkMode, activeKeys, subscriptions, reloadData } = useApp()
   const { user, isPremium, logout, deleteAccount } = useAuth()
   const navigate = useNavigate()
   const [notifStatus, setNotifStatus] = useState(
@@ -65,6 +65,10 @@ export default function Settings() {
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSending, setFeedbackSending] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [testPushState, setTestPushState] = useState('idle') // idle | sending | sent | failed
+  const [testPushError, setTestPushError] = useState('')
+  const [excelBusy, setExcelBusy] = useState(false)
+  const [excelMsg, setExcelMsg] = useState(null) // { ok, text }
   const [installPrompt, setInstallPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(false)
   const [pushSubscribed, setPushSubscribed] = useState(false)
@@ -163,6 +167,115 @@ export default function Settings() {
     if (!window.confirm('This cannot be undone. Delete everything?')) return
     Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
+  }
+
+  async function handleTestPush() {
+    setTestPushState('sending')
+    setTestPushError('')
+    try {
+      const r = await fetch(`${API_URL}/api/push/test`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
+      })
+      const data = await r.json().catch(() => ({}))
+      if (r.ok && data.ok) setTestPushState('sent')
+      else { setTestPushState('failed'); setTestPushError(data.error || '') }
+    } catch { setTestPushState('failed') }
+    setTimeout(() => setTestPushState('idle'), 6000)
+  }
+
+  async function handleExportExcel() {
+    if (!isPremium) { navigate('/upgrade'); return }
+    setExcelBusy(true)
+    try {
+      const XLSX = await import('xlsx')
+      const rows = subscriptions.map(s => ({
+        Name: s.name,
+        Category: s.category || 'Other',
+        Amount: s.amount,
+        Currency: s.currency || 'USD',
+        'Billing Cycle': s.billingCycle || 'Monthly',
+        'Next Billing Date': s.nextBillingDate || '',
+        Status: s.status || 'Active',
+        'Auto Renewal': s.autoRenewal === false ? 'No' : 'Yes',
+        'Payment Method': s.paymentMethod || '',
+        Notes: s.notes || '',
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Subscriptions')
+      XLSX.writeFile(wb, `renewbell-subscriptions-${new Date().toISOString().slice(0, 10)}.xlsx`)
+      setExcelMsg({ ok: true, text: `Exported ${rows.length} subscriptions to Excel` })
+    } catch {
+      setExcelMsg({ ok: false, text: 'Export failed — please try again' })
+    }
+    setExcelBusy(false)
+    setTimeout(() => setExcelMsg(null), 5000)
+  }
+
+  async function handleImportExcel(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file
+    if (!file) return
+    if (!isPremium) { navigate('/upgrade'); return }
+    setExcelBusy(true)
+    try {
+      const XLSX = await import('xlsx')
+      const { v4: uuidv4 } = await import('uuid')
+      const wb = XLSX.read(await file.arrayBuffer())
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]])
+      const norm = k => k.toLowerCase().replace(/[^a-z]/g, '')
+      const get = (row, ...names) => {
+        for (const key of Object.keys(row)) if (names.includes(norm(key))) return row[key]
+        return undefined
+      }
+      const existingNames = new Set(subscriptions.map(s => s.name?.toLowerCase()))
+      const now = new Date().toISOString()
+      const imported = []
+      for (const row of rows) {
+        const name = (get(row, 'name', 'service', 'subscription') || '').toString().trim()
+        const amount = parseFloat(get(row, 'amount', 'price', 'cost'))
+        if (!name || isNaN(amount) || amount <= 0) continue
+        if (existingNames.has(name.toLowerCase())) continue // skip duplicates
+        let nextBillingDate = get(row, 'nextbillingdate', 'renewaldate', 'nextbilling', 'duedate')
+        if (nextBillingDate instanceof Date) nextBillingDate = nextBillingDate.toISOString().slice(0, 10)
+        else if (typeof nextBillingDate === 'number') {
+          // Excel serial date
+          nextBillingDate = new Date(Date.UTC(1899, 11, 30) + nextBillingDate * 86400000).toISOString().slice(0, 10)
+        } else nextBillingDate = (nextBillingDate || '').toString().slice(0, 10)
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(nextBillingDate)) {
+          const d = new Date(); d.setDate(d.getDate() + 30)
+          nextBillingDate = d.toISOString().slice(0, 10)
+        }
+        imported.push({
+          id: uuidv4(),
+          name,
+          amount,
+          currency: (get(row, 'currency') || 'USD').toString().toUpperCase().slice(0, 3),
+          billingCycle: ['Weekly', 'Monthly', 'Quarterly', 'Yearly'].find(c => c.toLowerCase() === (get(row, 'billingcycle', 'cycle', 'frequency') || '').toString().toLowerCase()) || 'Monthly',
+          category: (get(row, 'category') || 'Other').toString(),
+          nextBillingDate,
+          status: 'Active',
+          autoRenewal: !/^(no|false|0)$/i.test((get(row, 'autorenewal', 'renews') || 'yes').toString()),
+          paymentMethod: (get(row, 'paymentmethod') || '').toString(),
+          notes: (get(row, 'notes') || '').toString(),
+          createdAt: now,
+          updatedAt: now,
+        })
+      }
+      if (imported.length) {
+        const merged = [...subscriptions, ...imported]
+        localStorage.setItem(activeKeys.SUBSCRIPTIONS, JSON.stringify(merged))
+        reloadData()
+        setExcelMsg({ ok: true, text: `Imported ${imported.length} subscriptions (${rows.length - imported.length} skipped as duplicates/invalid)` })
+      } else {
+        setExcelMsg({ ok: false, text: 'Nothing to import — needs Name and Amount columns; duplicates are skipped' })
+      }
+    } catch {
+      setExcelMsg({ ok: false, text: 'Could not read that file — is it a valid .xlsx?' })
+    }
+    setExcelBusy(false)
+    setTimeout(() => setExcelMsg(null), 8000)
   }
 
   async function handleSendFeedback() {
@@ -338,6 +451,15 @@ export default function Settings() {
                 <Bell size={14} />
                 {pushLoading ? 'Working...' : pushSubscribed ? 'Disable Background Push' : 'Enable Background Push (recommended)'}
               </button>
+              {pushSubscribed && (
+                <>
+                  <button onClick={handleTestPush} disabled={testPushState === 'sending'} className="btn-secondary w-full justify-center">
+                    🔔 {testPushState === 'sending' ? 'Sending…' : 'Send Test Notification'}
+                  </button>
+                  {testPushState === 'sent' && <p className="text-xs text-emerald-400 text-center">Sent! It should appear on your registered devices within seconds.</p>}
+                  {testPushState === 'failed' && <p className="text-xs text-red-400 text-center">{testPushError || 'Could not send — try disabling and re-enabling push.'}</p>}
+                </>
+              )}
             </div>
           ) : notifStatus !== 'denied' && notifStatus !== 'unsupported' ? (
             <button onClick={handleRequestNotifications} disabled={pushLoading} className="btn-primary w-full justify-center">
@@ -404,6 +526,19 @@ export default function Settings() {
             <input type="file" accept=".json" className="hidden" onChange={handleImport} />
           </label>
           {importError && <p className="text-xs text-red-400 text-center">{importError}</p>}
+
+          <div className="border-t border-slate-800/80 my-3 pt-3 space-y-2">
+            <p className="text-xs text-slate-500">Excel (.xlsx) {!isPremium && <span className="text-amber-400 font-semibold">· Pro</span>}</p>
+            <button onClick={handleExportExcel} disabled={excelBusy} className="btn-secondary w-full justify-center">
+              <Download size={14} /> {excelBusy ? 'Working…' : 'Export to Excel'}
+            </button>
+            <label className="btn-secondary w-full justify-center cursor-pointer">
+              <Upload size={14} /> Import from Excel
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportExcel} />
+            </label>
+            {excelMsg && <p className={`text-xs text-center ${excelMsg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{excelMsg.text}</p>}
+          </div>
+
           <button onClick={handleClearData} className="btn-danger w-full justify-center py-2.5 mt-3">
             <Trash2 size={14} /> Clear All My Data
           </button>

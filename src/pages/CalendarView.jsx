@@ -16,7 +16,15 @@ export default function CalendarView() {
 
   const active = useMemo(() => subscriptions.filter(s => s.status === 'Active'), [subscriptions])
 
-  const monthlyTotal = useMemo(() => active.reduce((s, sub) => s + getMonthlyAmount(sub), 0), [active])
+  // Per-currency totals — never add PKR to CAD into one meaningless number
+  const currencyTotals = useMemo(() => {
+    const map = {}
+    active.forEach(sub => {
+      const cur = sub.currency || 'USD'
+      map[cur] = (map[cur] || 0) + getMonthlyAmount(sub)
+    })
+    return Object.entries(map).map(([currency, monthly]) => ({ currency, monthly }))
+  }, [active])
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 })
@@ -55,7 +63,11 @@ export default function CalendarView() {
           <p className="text-sm text-slate-500">View upcoming charges by date</p>
         </div>
         <div className="card px-4 py-2 flex items-center gap-2">
-          <span className="text-sm font-bold text-cyan-400">{formatCurrency(monthlyTotal)}</span>
+          <span className="text-sm font-bold text-cyan-400">
+            {currencyTotals.length === 0
+              ? formatCurrency(0)
+              : currencyTotals.map(c => formatCurrency(c.monthly, c.currency)).join(' + ')}
+          </span>
           <span className="text-xs text-slate-500">/mo active</span>
         </div>
       </div>
@@ -129,7 +141,13 @@ export default function CalendarView() {
                     ))}
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-sm font-bold text-slate-100">{formatCurrency(subs.reduce((s, sub) => s + sub.amount, 0))}</div>
+                    <div className="text-sm font-bold text-slate-100">
+                      {Object.entries(subs.reduce((m, sub) => {
+                        const cur = sub.currency || 'USD'
+                        m[cur] = (m[cur] || 0) + sub.amount
+                        return m
+                      }, {})).map(([cur, amt]) => formatCurrency(amt, cur)).join(' + ')}
+                    </div>
                     <div className="text-xs text-slate-600">{subs.length} charge{subs.length > 1 ? 's' : ''}</div>
                   </div>
                 </div>

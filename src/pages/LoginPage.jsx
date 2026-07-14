@@ -8,28 +8,57 @@ export default function LoginPage() {
   const { loginWithGoogle, isAuthenticated, loading } = useAuth()
   const navigate = useNavigate()
   const [waking, setWaking] = useState(false)
+  const [email, setEmail] = useState('')
+  const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
+  const [emailError, setEmailError] = useState('')
 
   useEffect(() => {
     if (!loading && isAuthenticated) navigate('/')
   }, [isAuthenticated, loading])
 
-  async function handleLogin() {
-    setWaking(true)
-    // Poll /health until the real API responds — Render's wake-up page returns
-    // HTML without CORS headers, so fetch throws or returns non-JSON until the
-    // actual server is running. Only redirect once we get a real answer.
+  // Poll /health until the real API responds — Render's wake-up page returns
+  // HTML without CORS headers, so fetch throws or returns non-JSON until the
+  // actual server is running.
+  async function waitForServer() {
     const deadline = Date.now() + 120000 // up to 2 minutes
     while (Date.now() < deadline) {
       try {
         const res = await fetch(`${API_URL}/health`, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json().catch(() => null)
-          if (data?.status === 'ok') break // server is truly awake
+          if (data?.status === 'ok') return true // server is truly awake
         }
       } catch { /* still waking — keep polling */ }
       await new Promise(r => setTimeout(r, 3000))
     }
+    return false
+  }
+
+  async function handleLogin() {
+    setWaking(true)
+    await waitForServer()
     loginWithGoogle() // redirects browser to Google OAuth
+  }
+
+  async function handleEmailLogin(e) {
+    e.preventDefault()
+    if (!email.trim()) return
+    setEmailState('sending')
+    setEmailError('')
+    await waitForServer()
+    try {
+      const res = await fetch(`${API_URL}/auth/email/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) setEmailState('sent')
+      else { setEmailState('error'); setEmailError(data.error || 'Could not send the link. Try again.') }
+    } catch {
+      setEmailState('error')
+      setEmailError('Could not reach the server. Try again.')
+    }
   }
 
   if (loading) {
@@ -77,6 +106,40 @@ export default function LoginPage() {
                 </svg>
                 Continue with Google
               </button>
+
+              {/* Email magic-link sign-in for non-Google users */}
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-slate-800" />
+                <span className="text-xs text-slate-600">or</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+
+              {emailState === 'sent' ? (
+                <div className="text-center py-2">
+                  <p className="text-sm text-emerald-400 font-medium">✉️ Check your inbox</p>
+                  <p className="text-xs text-slate-500 mt-1">We sent a sign-in link to <span className="text-slate-300">{email}</span>. It's valid for 15 minutes.</p>
+                  <button onClick={() => setEmailState('idle')} className="text-xs text-cyan-500 underline mt-2">Use a different email</button>
+                </div>
+              ) : (
+                <form onSubmit={handleEmailLogin} className="space-y-2">
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/60"
+                  />
+                  <button
+                    type="submit"
+                    disabled={emailState === 'sending' || !email.trim()}
+                    className="w-full px-6 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl transition-colors font-medium text-sm border border-slate-700"
+                  >
+                    {emailState === 'sending' ? 'Sending link…' : 'Email me a sign-in link'}
+                  </button>
+                  {emailError && <p className="text-xs text-red-400 text-center">{emailError}</p>}
+                </form>
+              )}
 
               <div className="mt-6 space-y-2">
                 {[
