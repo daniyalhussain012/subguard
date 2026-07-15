@@ -29,6 +29,8 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.
 // so PWAs installed from the old URL keep working.
 const ALLOWED_ORIGINS = [...new Set([
   FRONTEND_URL,
+  'https://renewbell.app',
+  'https://www.renewbell.app',
   'https://renewbell.vercel.app',
   'https://subguard-five.vercel.app',
   'http://localhost:5173',
