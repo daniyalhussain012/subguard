@@ -572,10 +572,10 @@ export default function Settings() {
         </div>
       </Section>
 
-      {isPremium && (
-        <Section icon={MessageSquare} title="Feedback">
+      {(
+        <Section icon={MessageSquare} title="Feedback & Contact">
           <p className="text-xs text-slate-500 mb-3">
-            As a Pro member, your feedback goes straight to the founder. Feature requests, bugs, ideas — we read everything.
+            Feature requests, bugs, questions about your data — your message goes straight to the founder. We read everything.
           </p>
           <textarea
             className="input min-h-[90px] resize-none text-sm"

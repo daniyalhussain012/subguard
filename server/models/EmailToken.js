@@ -6,6 +6,7 @@ const schema = new mongoose.Schema({
   provider: { type: String, enum: ['gmail', 'outlook'], required: true },
   tokens: { type: Object, required: true },
   email: String,
+  lastScanAt: Date, // incremental scans: only fetch mail newer than this
 }, { timestamps: true });
 schema.index({ user: 1, provider: 1 }, { unique: true });
 module.exports = mongoose.model('EmailToken', schema);

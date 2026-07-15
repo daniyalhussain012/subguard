@@ -53,7 +53,7 @@ async function handleCallback(code) {
   return { tokens, email: data.email }
 }
 
-async function scanGmail(tokens) {
+async function scanGmail(tokens, since) {
   if (!tokens) throw new Error('Not connected to Gmail')
   const oauth2Client = createOAuth2Client()
   oauth2Client.setCredentials(tokens)
@@ -63,9 +63,10 @@ async function scanGmail(tokens) {
   oauth2Client.on('tokens', (t) => { updatedTokens = { ...tokens, ...t } })
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
 
-  const sixMonthsAgo = new Date()
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-  const afterDate = Math.floor(sixMonthsAgo.getTime() / 1000)
+  // Incremental: only mail newer than the last scan; first scan looks back 6 months
+  const fallback = new Date()
+  fallback.setMonth(fallback.getMonth() - 6)
+  const afterDate = Math.floor((since ? new Date(since) : fallback).getTime() / 1000)
 
   const results = []
   const seenIds = new Set()
@@ -98,7 +99,10 @@ async function scanGmail(tokens) {
         const snippet = full.snippet || ''
 
         const parsed = parseEmail(subject, snippet, from)
-        if (parsed.name || parsed.amount) {
+        // Only surface emails that actually look like an invoice/receipt —
+        // a detected amount is the signal; name-only matches are mostly
+        // newsletters and promos and just add noise
+        if (parsed.amount) {
           results.push({ ...parsed, emailDate: date, subject, from, messageId: msg.id })
         }
       }

@@ -151,9 +151,12 @@ function registerScanProvider(name, provider, mod) {
       const doc = await EmailToken.findOne({ user: req.user._id, provider });
       if (!doc) return res.status(400).json({ ok: false, error: `Not connected to ${provider}` });
       const scan = provider === 'gmail' ? mod.scanGmail : mod.scanOutlook;
-      const { results, updatedTokens } = await scan(doc.tokens);
-      if (updatedTokens) await EmailToken.updateOne({ _id: doc._id }, { tokens: updatedTokens });
-      res.json({ ok: true, results });
+      const since = doc.lastScanAt || null;
+      const { results, updatedTokens } = await scan(doc.tokens, since);
+      const update = { lastScanAt: new Date() };
+      if (updatedTokens) update.tokens = updatedTokens;
+      await EmailToken.updateOne({ _id: doc._id }, update);
+      res.json({ ok: true, results, since });
     } catch (err) { res.status(400).json({ ok: false, error: err.message }); }
   });
 

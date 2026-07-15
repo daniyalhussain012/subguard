@@ -32,14 +32,6 @@ export default function AlternativeModal({ sub, onClose, onSave }) {
               <Search size={14} /> Google: "cheaper alternative to {sub.name}"
               <ExternalLink size={12} className="ml-auto" />
             </a>
-            <a
-              href={`https://alternativeto.net/software/${sub.name.toLowerCase().replace(/\s+/g, '-')}/`}
-              target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2.5 bg-violet-500/15 hover:bg-violet-500/25 border border-violet-500/25 rounded-lg text-violet-300 text-sm font-medium transition-colors"
-            >
-              <ExternalLink size={14} /> Browse AlternativeTo.net
-              <ExternalLink size={12} className="ml-auto" />
-            </a>
           </div>
           <div>
             <label className="label">Notes on alternatives found</label>

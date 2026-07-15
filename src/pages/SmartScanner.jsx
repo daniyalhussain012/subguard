@@ -302,8 +302,16 @@ export default function SmartScanner() {
   const [gmailStatus, setGmailStatus] = useState({ configured: false, connected: false })
   const [outlookStatus, setOutlookStatus] = useState({ configured: false, connected: false })
   const [scanning, setScanning] = useState(null)
-  const [scanResults, setScanResults] = useState([])
-  const [ignoredIds, setIgnoredIds] = useState([])
+  // Scan results survive navigating away to add/edit a subscription — losing
+  // the whole list after adding one item forced users to re-scan every time
+  const scanCache = (() => { try { return JSON.parse(sessionStorage.getItem('subguard_scan_cache') || '{}') } catch { return {} } })()
+  const [scanResults, setScanResults] = useState(scanCache.results || [])
+  const [ignoredIds, setIgnoredIds] = useState(scanCache.ignored || [])
+  const [scanSince, setScanSince] = useState(scanCache.since || null)
+
+  useEffect(() => {
+    sessionStorage.setItem('subguard_scan_cache', JSON.stringify({ results: scanResults, ignored: ignoredIds, since: scanSince }))
+  }, [scanResults, ignoredIds, scanSince])
 
   useEffect(() => {
     checkBackend()
@@ -335,6 +343,8 @@ export default function SmartScanner() {
       const data = await res.json()
       if (data.ok) {
         setScanResults(data.results || [])
+        setScanSince(data.since || null)
+        setIgnoredIds([])
       }
     } catch (err) {
       console.error('Scan error:', err)
@@ -491,7 +501,7 @@ export default function SmartScanner() {
             />
           )}
           {visibleResults.length > 0 && tab === 'gmail' && (
-            <ScanResultList results={visibleResults} subscriptions={subscriptions} onIgnore={i => setIgnoredIds(ids => [...ids, i])} onAdd={handleAddResult} />
+            <ScanResultList results={visibleResults} subscriptions={subscriptions} since={scanSince} onIgnore={i => setIgnoredIds(ids => [...ids, i])} onAdd={handleAddResult} />
           )}
         </div>
       )}
@@ -519,7 +529,7 @@ export default function SmartScanner() {
             />
           )}
           {visibleResults.length > 0 && tab === 'outlook' && (
-            <ScanResultList results={visibleResults} subscriptions={subscriptions} onIgnore={i => setIgnoredIds(ids => [...ids, i])} onAdd={handleAddResult} />
+            <ScanResultList results={visibleResults} subscriptions={subscriptions} since={scanSince} onIgnore={i => setIgnoredIds(ids => [...ids, i])} onAdd={handleAddResult} />
           )}
         </div>
       )}
@@ -634,17 +644,25 @@ export default function SmartScanner() {
   )
 }
 
-function ScanResultList({ results, subscriptions, onIgnore, onAdd }) {
+function ScanResultList({ results, subscriptions, onIgnore, onAdd, since }) {
   const navigate = useNavigate()
+  const sinceLabel = since ? new Date(since).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null
   if (results.length === 0) return (
     <div className="card p-8 text-center">
       <div className="text-4xl mb-2">📭</div>
-      <p className="text-slate-400 text-sm">No subscription emails found in the last 6 months.</p>
+      <p className="text-slate-400 text-sm">
+        {sinceLabel
+          ? `No new invoice-like emails since your last scan (${sinceLabel}).`
+          : 'No invoice-like emails found in the last 6 months.'}
+      </p>
     </div>
   )
   return (
     <div className="space-y-3">
-      <div className="text-sm font-semibold text-slate-300">Found {results.length} subscription-related emails</div>
+      <div className="text-sm font-semibold text-slate-300">
+        Found {results.length} invoice-like email{results.length !== 1 ? 's' : ''}
+        {sinceLabel && <span className="text-slate-500 font-normal"> · new since {sinceLabel}</span>}
+      </div>
       {results.map((r, i) => {
         const isDuplicate = subscriptions.some(s => s.name?.toLowerCase() === r.name?.toLowerCase())
         const confidenceColor = { High: 'text-emerald-400', Medium: 'text-amber-400', Low: 'text-orange-400' }

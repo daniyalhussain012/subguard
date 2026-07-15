@@ -90,7 +90,7 @@ async function graphGet(tokens, path) {
   return res.json()
 }
 
-async function scanOutlook(tokens) {
+async function scanOutlook(tokens, since) {
   if (!tokens) throw new Error('Not connected to Outlook')
   const fresh = await ensureFreshTokens(tokens)
 
@@ -106,12 +106,19 @@ async function scanOutlook(tokens) {
   const data = await graphGet(fresh, `/me/messages?${params.toString()}`)
   const results = []
 
+  // Incremental: only mail newer than the last scan; first scan looks back 6 months
+  const fallback = new Date()
+  fallback.setMonth(fallback.getMonth() - 6)
+  const cutoff = since ? new Date(since) : fallback
+
   for (const msg of data.value || []) {
+    if (msg.receivedDateTime && new Date(msg.receivedDateTime) < cutoff) continue
     const subject = msg.subject || ''
     const from = msg.from?.emailAddress?.address || ''
     const body = msg.bodyPreview || ''
     const parsed = parseEmail(subject, body, from)
-    if (parsed.name || parsed.amount) {
+    // Require a detected amount so only invoice-like emails surface
+    if (parsed.amount) {
       results.push({ ...parsed, emailDate: msg.receivedDateTime, subject, from, messageId: msg.id })
     }
   }

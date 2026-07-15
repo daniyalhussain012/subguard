@@ -100,7 +100,7 @@ export default function PrivacyPolicy() {
         </Section>
 
         <Section title="Contact Us">
-          <p>Questions about this policy or your data? Reach us at <a href="mailto:support@renewbell.app" className="text-cyan-500 hover:text-cyan-400 underline">support@renewbell.app</a>.</p>
+          <p>Questions about this policy or your data? Send us a message from inside the app — <strong className="text-slate-300">Settings → Feedback</strong> — and we'll get back to you.</p>
         </Section>
 
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-cyan-500 hover:text-cyan-400">
