@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { v4 as uuidv4 } from 'uuid'
 import { Users2, Plus, X, Edit2, UserPlus, AlertTriangle, DollarSign } from 'lucide-react'
 import { useApp } from '../App'
-import { AVATAR_OPTIONS, FAMILY_ROLES, getMonthlyAmount, formatCurrency, CATEGORY_ICONS } from '../utils/storage'
+import { AVATAR_OPTIONS, FAMILY_ROLES, getMonthlyAmount, formatCurrency, formatMonthlyByCurrency, CATEGORY_ICONS } from '../utils/storage'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
@@ -86,7 +86,7 @@ export default function HouseholdHub() {
     return household.map(m => {
       const mySubs = active.filter(s => (s.usedBy || []).includes(m.id))
       const spend = mySubs.reduce((sum, s) => sum + getMonthlyAmount(s), 0)
-      return { ...m, spend, subCount: mySubs.length }
+      return { ...m, spend, spendStr: formatMonthlyByCurrency(mySubs), subCount: mySubs.length }
     })
   }, [household, active])
 
@@ -292,22 +292,22 @@ export default function HouseholdHub() {
             <div className="space-y-2">
               <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/50">
                 <span className="text-sm text-slate-400">Total household spend</span>
-                <span className="font-bold text-slate-100">{formatCurrency(totalSpend)}/mo</span>
+                <span className="font-bold text-slate-100">{formatMonthlyByCurrency(active)}/mo</span>
               </div>
               <div className="flex justify-between items-center p-3 rounded-lg bg-slate-800/50">
                 <span className="text-sm text-slate-400">Shared subscriptions</span>
-                <span className="font-semibold text-cyan-400">{formatCurrency(sharedSpend)}/mo</span>
+                <span className="font-semibold text-cyan-400">{formatMonthlyByCurrency(sharedSubs)}/mo</span>
               </div>
               {memberSpend.map(m => (
                 <div key={m.id} className="flex justify-between items-center p-3 rounded-lg bg-slate-800/30">
                   <span className="text-sm text-slate-400">{m.avatar} {m.name}</span>
-                  <span className="font-semibold text-slate-200">{formatCurrency(m.spend)}/mo · {m.subCount} subs</span>
+                  <span className="font-semibold text-slate-200">{m.spendStr}/mo · {m.subCount} subs</span>
                 </div>
               ))}
             </div>
             <div className="card border-cyan-500/20 p-3 text-center">
               <p className="text-xs text-slate-500">Your household spends</p>
-              <p className="text-2xl font-bold text-cyan-400">{formatCurrency(totalSpend * 12)}/year</p>
+              <p className="text-2xl font-bold text-cyan-400">{formatMonthlyByCurrency(active, 12)}/year</p>
               <p className="text-xs text-slate-500">on subscriptions</p>
             </div>
           </div>

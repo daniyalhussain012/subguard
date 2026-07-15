@@ -65,6 +65,18 @@ export default function Settings() {
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSending, setFeedbackSending] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
+  const [adminData, setAdminData] = useState(null)
+
+  // Admin-only signup/subscription tracking — the server returns 403 for
+  // everyone except ADMIN_EMAILS accounts, so the section stays hidden
+  useEffect(() => {
+    fetch(`${API_URL}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setAdminData(d) })
+      .catch(() => {})
+  }, [])
   const [testPushState, setTestPushState] = useState('idle') // idle | sending | sent | failed
   const [testPushError, setTestPushError] = useState('')
   const [excelBusy, setExcelBusy] = useState(false)
@@ -173,15 +185,25 @@ export default function Settings() {
     setTestPushState('sending')
     setTestPushError('')
     try {
+      // Re-register THIS device first so the test provably covers the device
+      // the user is looking at, not just previously registered ones
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        await subscribeToPush().catch(() => {})
+      }
       const r = await fetch(`${API_URL}/api/push/test`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
       })
       const data = await r.json().catch(() => ({}))
-      if (r.ok && data.ok) setTestPushState('sent')
-      else { setTestPushState('failed'); setTestPushError(data.error || '') }
+      if (r.ok && data.ok && data.sent > 0) {
+        setTestPushState('sent')
+        setTestPushError(`${data.sent}`) // reuse field to carry the device count
+      } else {
+        setTestPushState('failed')
+        setTestPushError(data.error || (data.sent === 0 ? 'No devices registered — toggle push off and on, then retry.' : ''))
+      }
     } catch { setTestPushState('failed') }
-    setTimeout(() => setTestPushState('idle'), 6000)
+    setTimeout(() => setTestPushState('idle'), 8000)
   }
 
   async function handleExportExcel() {
@@ -456,7 +478,12 @@ export default function Settings() {
                   <button onClick={handleTestPush} disabled={testPushState === 'sending'} className="btn-secondary w-full justify-center">
                     🔔 {testPushState === 'sending' ? 'Sending…' : 'Send Test Notification'}
                   </button>
-                  {testPushState === 'sent' && <p className="text-xs text-emerald-400 text-center">Sent! It should appear on your registered devices within seconds.</p>}
+                  {testPushState === 'sent' && (
+                    <p className="text-xs text-emerald-400 text-center">
+                      Sent to {testPushError} device{testPushError !== '1' ? 's' : ''} — it should pop up within seconds.
+                      <span className="block text-slate-500 mt-1">Nothing appeared? Check your OS notification settings for this browser (Windows Focus Assist / macOS Focus mute them silently).</span>
+                    </p>
+                  )}
                   {testPushState === 'failed' && <p className="text-xs text-red-400 text-center">{testPushError || 'Could not send — try disabling and re-enabling push.'}</p>}
                 </>
               )}
@@ -564,6 +591,38 @@ export default function Settings() {
           >
             {feedbackSent ? <><CheckCircle size={14} /> Sent — thank you!</> : feedbackSending ? 'Sending…' : <><MessageSquare size={14} /> Send Feedback</>}
           </button>
+        </Section>
+      )}
+
+      {adminData && (
+        <Section icon={Crown} title="Admin · Signups & Subscriptions">
+          <div className="grid grid-cols-4 gap-2 mb-4 text-center">
+            {[
+              { label: 'Users', value: adminData.total },
+              { label: 'Pro', value: adminData.pro },
+              { label: 'Free', value: adminData.free },
+              { label: 'Feedback', value: adminData.feedbackCount },
+            ].map(s => (
+              <div key={s.label} className="bg-slate-800/60 rounded-xl py-2.5">
+                <div className="text-lg font-bold text-cyan-400">{s.value}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            {adminData.users.map(u => (
+              <div key={u.email + u.createdAt} className="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800/60 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <div className="text-slate-200 font-medium truncate">{u.name || '—'}</div>
+                  <div className="text-slate-500 truncate">{u.email}</div>
+                </div>
+                <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${u.plan === 'premium' ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-700/60 text-slate-400'}`}>
+                  {u.plan === 'premium' ? 'PRO' : 'FREE'}
+                </span>
+                <span className="shrink-0 text-slate-600">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''}</span>
+              </div>
+            ))}
+          </div>
         </Section>
       )}
 

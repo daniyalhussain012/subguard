@@ -4,11 +4,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { v4 as uuidv4 } from 'uuid'
 import Layout from './components/Layout'
 import OnboardingModal from './components/OnboardingModal'
-import { defaultSettings } from './utils/storage'
+import { format } from 'date-fns'
+import { defaultSettings, getNextChargeDate } from './utils/storage'
 import { checkAndSendNotifications, registerServiceWorker, dismissNotifStage1, subscribeToPush } from './utils/notifications'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallback'
+import AuthEmailPage from './pages/AuthEmail'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -89,6 +91,7 @@ function AnimatedRoutes() {
           <Routes location={location}>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/auth/email" element={<AuthEmailPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
@@ -282,7 +285,21 @@ function AppInner() {
   }
 
   function loadAll(keys) {
-    setSubscriptions(JSON.parse(localStorage.getItem(keys.SUBSCRIPTIONS) || '[]'))
+    // Advance stale billing dates: an auto-renewing sub whose nextBillingDate
+    // already passed has really renewed — roll it forward to the next real
+    // charge. Keeps every view honest AND keeps server push reminders alive
+    // (the daily cron matches dates exactly 7/2/1 days ahead).
+    const rawSubs = JSON.parse(localStorage.getItem(keys.SUBSCRIPTIONS) || '[]')
+    let advancedAny = false
+    const subs = rawSubs.map(s => {
+      if (s.status !== 'Active' || s.autoRenewal === false || !s.nextBillingDate) return s
+      const next = format(getNextChargeDate(s), 'yyyy-MM-dd')
+      if (next === String(s.nextBillingDate).slice(0, 10)) return s
+      advancedAny = true
+      return { ...s, nextBillingDate: next }
+    })
+    if (advancedAny) localStorage.setItem(keys.SUBSCRIPTIONS, JSON.stringify(subs))
+    setSubscriptions(subs)
     setReminders(JSON.parse(localStorage.getItem(keys.REMINDERS) || '[]'))
     setHousehold(JSON.parse(localStorage.getItem(keys.HOUSEHOLD) || '[]'))
     setScanHistory(JSON.parse(localStorage.getItem(keys.SCAN_HISTORY) || '[]'))

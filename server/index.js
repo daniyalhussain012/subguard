@@ -171,6 +171,20 @@ function registerScanProvider(name, provider, mod) {
 registerScanProvider('google', 'gmail', gmail);
 registerScanProvider('microsoft', 'outlook', outlook);
 
+// ── Admin: signup & subscription tracking ─────────────────────────────────────
+// Only accounts listed in ADMIN_EMAILS can read this.
+app.get('/api/admin/users', authMiddleware, async (req, res) => {
+  try {
+    if (!authMiddleware.isAdminEmail(req.user.email)) return res.status(403).json({ error: 'Forbidden' });
+    const users = await User.find({}, 'name email plan createdAt premiumActivatedAt premiumExpiresAt')
+      .sort({ createdAt: -1 }).limit(200);
+    const total = await User.countDocuments();
+    const pro = await User.countDocuments({ plan: 'premium' });
+    const feedbackCount = await Feedback.countDocuments();
+    res.json({ total, pro, free: total - pro, feedbackCount, users });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
 // ── Feedback ──────────────────────────────────────────────────────────────────
 app.post('/api/feedback', authMiddleware, async (req, res) => {
   try {

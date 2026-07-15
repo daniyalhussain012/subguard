@@ -218,6 +218,29 @@ export function getYearlyAmount(sub) {
   }
 }
 
+// The next date this subscription will actually charge: the stored
+// nextBillingDate if it's still ahead, otherwise projected forward by the
+// billing cycle (stored dates go stale — the app doesn't rewrite them after
+// each renewal). Non-renewing subs whose date passed return today.
+export function getNextChargeDate(sub) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  if (!sub.nextBillingDate) return today
+  const anchor = parseISO(String(sub.nextBillingDate).slice(0, 10))
+  if (isNaN(anchor.getTime()) || anchor >= today) return isNaN(anchor.getTime()) ? today : anchor
+  if (sub.autoRenewal === false) return today
+  const step = {
+    Weekly:    (i) => addWeeks(anchor, i),
+    Monthly:   (i) => addMonths(anchor, i),
+    Quarterly: (i) => addMonths(anchor, i * 3),
+    Yearly:    (i) => addYears(anchor, i),
+  }[sub.billingCycle] || ((i) => addMonths(anchor, i))
+  for (let i = 1; i < 1200; i++) {
+    const d = step(i)
+    if (d >= today) return d
+  }
+  return today
+}
+
 // All charge dates for a subscription within [rangeStart, rangeEnd].
 // Auto-renewing subs repeat on their billing cycle indefinitely; non-renewing
 // subs charge exactly once, on nextBillingDate. Occurrences are computed as
@@ -249,6 +272,20 @@ export function getChargeDatesInRange(sub, rangeStart, rangeEnd) {
 
 export function formatCurrency(amount, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount || 0)
+}
+
+// Sum monthly amounts per currency and render as e.g. "$12.00 + CA$40.00" —
+// never add amounts of different currencies into one meaningless number.
+export function formatMonthlyByCurrency(subs, multiplier = 1) {
+  const map = {}
+  subs.forEach(sub => {
+    const cur = sub.currency || 'USD'
+    map[cur] = (map[cur] || 0) + getMonthlyAmount(sub) * multiplier
+  })
+  const parts = Object.entries(map)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cur, v]) => formatCurrency(v, cur))
+  return parts.length ? parts.join(' + ') : formatCurrency(0)
 }
 
 export function getDaysUntil(dateStr) {

@@ -95,8 +95,13 @@ router.post('/email/start', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '15m' }
     );
-    const base = (process.env.SERVER_URL || process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-    const link = `${base}/auth/email/verify?token=${token}`;
+    // Link goes to a FRONTEND page with the token in the URL fragment:
+    // fragments are never sent to any server (no logs, no Referer) and email
+    // security scanners that prefetch links only GET the page HTML — they
+    // don't run the JS that redeems the token, so the single-use code
+    // survives until the real user's browser opens it.
+    const frontend = (process.env.FRONTEND_URL || 'https://renewbell.app').replace(/\/$/, '');
+    const link = `${frontend}/auth/email#t=${token}`;
     const ok = await sendEmail(
       email,
       'Your RenewBell sign-in link',
@@ -113,22 +118,38 @@ router.post('/email/start', async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
+async function redeemMagicToken(rawToken) {
+  const p = jwt.verify(rawToken, process.env.JWT_SECRET);
+  if (!p.magic || !p.jti || usedCodes.has(p.jti)) throw new Error('invalid');
+  usedCodes.set(p.jti, Date.now() + 16 * 60000); // single-use
+  let user = await User.findOne({ email: p.email });
+  if (!user) {
+    user = await User.create({
+      // googleId is required+unique in the schema; email users get a
+      // deterministic placeholder so the constraint still holds
+      googleId: `email:${p.email}`,
+      email: p.email,
+      name: p.email.split('@')[0],
+    });
+    notifyAdmin('🎉 New RenewBell signup (email)', `${p.email} just signed up via email link.`);
+  }
+  return user;
+}
+
+// Primary path: the frontend /auth/email page POSTs the fragment token here
+// and receives the session token directly — no redirect hops to break.
+router.post('/email/verify', async (req, res) => {
+  try {
+    const user = await redeemMagicToken(req.body.token);
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+    res.json({ token });
+  } catch { res.status(400).json({ error: 'Invalid or expired link' }); }
+});
+
+// Legacy path for links sent before the fragment flow shipped
 router.get('/email/verify', async (req, res) => {
   try {
-    const p = jwt.verify(req.query.token, process.env.JWT_SECRET);
-    if (!p.magic || !p.jti || usedCodes.has(p.jti)) throw new Error('invalid');
-    usedCodes.set(p.jti, Date.now() + 16 * 60000); // single-use
-    let user = await User.findOne({ email: p.email });
-    if (!user) {
-      user = await User.create({
-        // googleId is required+unique in the schema; email users get a
-        // deterministic placeholder so the constraint still holds
-        googleId: `email:${p.email}`,
-        email: p.email,
-        name: p.email.split('@')[0],
-      });
-      notifyAdmin('🎉 New RenewBell signup (email)', `${p.email} just signed up via email link.`);
-    }
+    const user = await redeemMagicToken(req.query.token);
     const code = jwt.sign(
       { userId: user._id, otc: true, jti: crypto.randomUUID() },
       process.env.JWT_SECRET,

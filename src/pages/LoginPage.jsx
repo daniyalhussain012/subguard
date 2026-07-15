@@ -8,36 +8,46 @@ export default function LoginPage() {
   const { loginWithGoogle, isAuthenticated, loading } = useAuth()
   const navigate = useNavigate()
   const [waking, setWaking] = useState(false)
+  const [serverReady, setServerReady] = useState(false)
   const [email, setEmail] = useState('')
   const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
   const [emailError, setEmailError] = useState('')
+  const linkError = new URLSearchParams(window.location.search).get('error') === 'email_link_invalid'
 
   useEffect(() => {
     if (!loading && isAuthenticated) navigate('/')
   }, [isAuthenticated, loading])
 
-  // Poll /health until the real API responds — Render's wake-up page returns
-  // HTML without CORS headers, so fetch throws or returns non-JSON until the
-  // actual server is running.
+  // Pre-warm: the server runs on an always-on instance now, so one ping on
+  // page load both warms the TLS connection and confirms it's up — clicking
+  // "Continue with Google" then redirects instantly with no waiting screen.
+  useEffect(() => {
+    fetch(`${API_URL}/health`, { cache: 'no-store' })
+      .then(r => r.ok && setServerReady(true))
+      .catch(() => {})
+  }, [])
+
+  // Fallback for the rare case the pre-warm ping failed (deploy in progress)
   async function waitForServer() {
-    const deadline = Date.now() + 120000 // up to 2 minutes
+    const deadline = Date.now() + 120000
     while (Date.now() < deadline) {
       try {
         const res = await fetch(`${API_URL}/health`, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json().catch(() => null)
-          if (data?.status === 'ok') return true // server is truly awake
+          if (data?.status === 'ok') return true
         }
-      } catch { /* still waking — keep polling */ }
+      } catch { /* keep polling */ }
       await new Promise(r => setTimeout(r, 3000))
     }
     return false
   }
 
   async function handleLogin() {
+    if (serverReady) { loginWithGoogle(); return } // instant path
     setWaking(true)
     await waitForServer()
-    loginWithGoogle() // redirects browser to Google OAuth
+    loginWithGoogle()
   }
 
   async function handleEmailLogin(e) {
@@ -45,7 +55,6 @@ export default function LoginPage() {
     if (!email.trim()) return
     setEmailState('sending')
     setEmailError('')
-    await waitForServer()
     try {
       const res = await fetch(`${API_URL}/auth/email/start`, {
         method: 'POST',
@@ -86,6 +95,9 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl">
+          {linkError && emailState === 'idle' && (
+            <p className="text-xs text-amber-400 text-center mb-4">That sign-in link was invalid or expired — request a fresh one below.</p>
+          )}
           {waking ? (
             <div className="text-center py-4">
               <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />

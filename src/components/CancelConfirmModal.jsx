@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, AlertTriangle, ExternalLink, CheckSquare, Square, CheckCircle } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import { v4 as uuidv4 } from 'uuid'
-import { formatCurrency, getMonthlyAmount } from '../utils/storage'
+import { formatCurrency, getMonthlyAmount, getNextChargeDate } from '../utils/storage'
 import { findCancellationGuide, getDifficultyColor, getDifficultyIcon } from '../data/cancellationGuides'
 
 const CANCEL_REASONS = [
@@ -65,7 +65,7 @@ export default function CancelConfirmModal({ sub, onClose, onConfirmed }) {
 
   const guide = findCancellationGuide(sub.name)
   const monthly = getMonthlyAmount(sub)
-  const verifyDate = format(addDays(new Date(sub.nextBillingDate || new Date()), 5), 'MMM d, yyyy')
+  const verifyDate = format(addDays(getNextChargeDate(sub), 5), 'MMM d, yyyy')
 
   function toggleGuideCheck(id) {
     setGuideChecked(c => c.includes(id) ? c.filter(x => x !== id) : [...c, id])
@@ -83,10 +83,8 @@ export default function CancelConfirmModal({ sub, onClose, onConfirmed }) {
       reason,
       notes,
       setReminder,
-      expectedLastCharge: sub.nextBillingDate,
-      verifyDate: sub.nextBillingDate
-        ? format(addDays(new Date(sub.nextBillingDate), 5), 'yyyy-MM-dd')
-        : null,
+      expectedLastCharge: format(getNextChargeDate(sub), 'yyyy-MM-dd'),
+      verifyDate: format(addDays(getNextChargeDate(sub), 5), 'yyyy-MM-dd'),
       verified: null,
       createdAt: new Date().toISOString(),
     }

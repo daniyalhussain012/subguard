@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../App'
 import {
-  getMonthlyAmount, getYearlyAmount, formatCurrency,
+  getMonthlyAmount, getYearlyAmount, formatCurrency, formatMonthlyByCurrency,
   getDaysUntil, formatDaysUntil, CATEGORY_ICONS, generateSmartAlerts
 } from '../utils/storage'
 import CountUp from '../components/CountUp'
@@ -140,11 +140,14 @@ export default function Dashboard() {
   }, [active])
 
   const totalMonthly = useMemo(() => currencyTotals.reduce((s, c) => s + c.monthly, 0), [currencyTotals])
-  const savedMonthly = useMemo(() => [...paused, ...cancelled].reduce((s, sub) => s + getMonthlyAmount(sub), 0), [paused, cancelled])
-  const atRiskWeekly = useMemo(() =>
-    active.filter(s => s.importance === 'Can Live Without' && getDaysUntil(s.nextBillingDate) <= 7 && getDaysUntil(s.nextBillingDate) >= 0)
-      .reduce((sum, s) => sum + getMonthlyAmount(s), 0),
+  const savedSubs = useMemo(() => [...paused, ...cancelled], [paused, cancelled])
+  const savedMonthly = useMemo(() => savedSubs.reduce((s, sub) => s + getMonthlyAmount(sub), 0), [savedSubs])
+  const atRiskSubs = useMemo(() =>
+    active.filter(s => s.importance === 'Can Live Without' && getDaysUntil(s.nextBillingDate) <= 7 && getDaysUntil(s.nextBillingDate) >= 0),
     [active])
+  const atRiskWeekly = useMemo(() => atRiskSubs.reduce((sum, s) => sum + getMonthlyAmount(s), 0), [atRiskSubs])
+  // CountUp animates a single number — only usable when all amounts share one currency
+  const isSingleCurrency = subs => new Set(subs.map(s => s.currency || 'USD')).size <= 1
 
   const urgent48 = useMemo(() =>
     active.filter(s => getDaysUntil(s.nextBillingDate) >= 0 && getDaysUntil(s.nextBillingDate) <= 2)
@@ -210,10 +213,14 @@ export default function Dashboard() {
             : <span className="text-sm leading-tight">{currencyTotals.map(c => formatCurrency(c.monthly, c.currency)).join(' + ')}</span>
         } sub={`${active.length} active charges`} color="cyan" index={0} onClick={() => navigate('/leaks')} />
         <StatCard icon={CheckCircle} label="Saved This Month" value={
-          <CountUp target={savedMonthly} prefix="$" decimals={2} duration={1000} />
+          isSingleCurrency(savedSubs)
+            ? <CountUp target={savedMonthly} prefix="$" decimals={2} duration={1000} />
+            : <span className="text-sm leading-tight">{formatMonthlyByCurrency(savedSubs)}</span>
         } sub="paused & cancelled" color="emerald" index={1} onClick={() => navigate('/victory')} />
         <StatCard icon={Flame} label="At Risk This Week" value={
-          <CountUp target={atRiskWeekly} prefix="$" decimals={2} duration={1000} />
+          isSingleCurrency(atRiskSubs)
+            ? <CountUp target={atRiskWeekly} prefix="$" decimals={2} duration={1000} />
+            : <span className="text-sm leading-tight">{formatMonthlyByCurrency(atRiskSubs)}</span>
         } sub="non-essential renewals" color="amber" index={2} onClick={() => navigate('/radar')} />
         <StatCard icon={CreditCard} label="Active Charges" value={active.length} sub={`${subscriptions.length} total tracked`} color="red" index={3} onClick={() => navigate('/subscriptions')} />
       </div>

@@ -8,7 +8,7 @@ import {
   Search, AlertTriangle, ArrowLeft, BookOpen, Flag,
 } from 'lucide-react'
 import { useApp } from '../App'
-import { formatCurrency, getMonthlyAmount, CATEGORY_ICONS, getDaysUntil, formatDaysUntil } from '../utils/storage'
+import { formatCurrency, getMonthlyAmount, formatMonthlyByCurrency, getNextChargeDate, CATEGORY_ICONS, getDaysUntil, formatDaysUntil } from '../utils/storage'
 import {
   CANCELLATION_GUIDES, findCancellationGuide, CANCELLATION_CHECKLIST_ITEMS,
   getDifficultyColor, getDifficultyIcon, getDifficultyEmoji, getGuideCategory, GUIDE_CATEGORIES,
@@ -32,7 +32,7 @@ function GuideSteps({ guide, sub }) {
 
   function handleLogCancellation() {
     if (!sub) return
-    const verifyDate = format(addDays(new Date(sub.nextBillingDate), 5), 'yyyy-MM-dd')
+    const verifyDate = format(addDays(getNextChargeDate(sub), 5), 'yyyy-MM-dd')
     const data = {
       id: uuidv4(),
       subscriptionId: sub.id,
@@ -41,7 +41,7 @@ function GuideSteps({ guide, sub }) {
       billingCycle: sub.billingCycle,
       cancelledAt: format(new Date(), 'yyyy-MM-dd'),
       confirmationNumber: confNum,
-      expectedLastCharge: sub.nextBillingDate,
+      expectedLastCharge: format(getNextChargeDate(sub), 'yyyy-MM-dd'),
       verifyDate,
       verified: null,
       createdAt: new Date().toISOString(),
@@ -378,7 +378,7 @@ function CancelledTab() {
       if ((rank[guide.difficulty] || 0) > (rank[hGuide?.difficulty] || 0)) return c
       return h
     }, null)
-    return { totalCancelled: cancelledSubs.length, totalSaved, hardest }
+    return { totalCancelled: cancelledSubs.length, totalSaved, savedStr: formatMonthlyByCurrency(cancelledSubs), hardest }
   }, [cancelledSubs, cancellations])
 
   return (
@@ -414,7 +414,7 @@ function CancelledTab() {
             </div>
             <div>
               <div className="text-xs text-slate-500">Monthly savings freed</div>
-              <div className="font-bold text-emerald-400">{formatCurrency(hallOfFame.totalSaved)}/mo</div>
+              <div className="font-bold text-emerald-400">{hallOfFame.savedStr}/mo</div>
             </div>
             {hallOfFame.hardest && (
               <div>

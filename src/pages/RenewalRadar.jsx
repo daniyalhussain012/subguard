@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Radar, ShieldCheck, AlertTriangle, XCircle, ChevronDown, ChevronUp, Clock, DollarSign, Zap } from 'lucide-react'
 import { useApp } from '../App'
 import {
-  getMonthlyAmount, formatCurrency, getDaysUntil,
+  getMonthlyAmount, formatCurrency, formatMonthlyByCurrency, getDaysUntil,
   formatDaysUntil, CATEGORY_ICONS, getCountdown
 } from '../utils/storage'
 import { format, addDays } from 'date-fns'
@@ -239,16 +239,16 @@ export default function RenewalRadar() {
       .filter(s => s.importance === 'Can Live Without')
       .sort((a, b) => getMonthlyAmount(b) - getMonthlyAmount(a))[0]
 
-    const potentialSavings = upcoming
-      .filter(s => s.importance === 'Can Live Without')
-      .reduce((sum, s) => sum + getMonthlyAmount(s), 0)
+    const cutCandidates = upcoming.filter(s => s.importance === 'Can Live Without')
+    const potentialSavings = cutCandidates.reduce((sum, s) => sum + getMonthlyAmount(s), 0)
+    const potentialSavingsStr = formatMonthlyByCurrency(cutCandidates)
 
     const needsDecision = upcoming.filter(s => getDaysUntil(s.nextBillingDate) <= 2).length
 
     const keptThisMonth = subscriptions.filter(s => s.decisionStatus === 'keep').length
     const cancelledThisMonth = subscriptions.filter(s => s.status === 'Cancelled').length
 
-    return { highestRisk, potentialSavings, needsDecision, keptThisMonth, cancelledThisMonth }
+    return { highestRisk, potentialSavings, potentialSavingsStr, needsDecision, keptThisMonth, cancelledThisMonth }
   }, [upcoming, subscriptions])
 
   function handleDecision(id, decision) {
@@ -315,7 +315,7 @@ export default function RenewalRadar() {
           <span className="text-xl">💰</span>
           <div>
             <div className="text-xs font-bold text-amber-400">Potential savings</div>
-            <div className="text-sm font-semibold text-slate-200">{formatCurrency(insights.potentialSavings)}/mo</div>
+            <div className="text-sm font-semibold text-slate-200">{insights.potentialSavingsStr}/mo</div>
           </div>
         </div>
         <div className="card border-red-500/25 p-3 flex items-center gap-2">
