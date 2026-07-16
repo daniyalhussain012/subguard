@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   googleId: { type: String, required: true, unique: true },
   email: { type: String, required: true },
+  passwordHash: String, // set for email+password accounts; absent for Google/magic-link-only
   name: String,
   avatar: String,
   plan: { type: String, enum: ['free','premium'], default: 'free' },

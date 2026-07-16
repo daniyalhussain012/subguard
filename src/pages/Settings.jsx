@@ -62,6 +62,9 @@ export default function Settings() {
   const [importError, setImportError] = useState('')
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [deleteAccountError, setDeleteAccountError] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [pwSaveState, setPwSaveState] = useState('idle') // idle | saving | saved | error
+  const [pwSaveError, setPwSaveError] = useState('')
   const [feedbackText, setFeedbackText] = useState('')
   const [feedbackSending, setFeedbackSending] = useState(false)
   const [feedbackSent, setFeedbackSent] = useState(false)
@@ -320,6 +323,22 @@ export default function Settings() {
     setTimeout(() => setExcelMsg(null), 8000)
   }
 
+  async function handleSetPassword() {
+    if (newPassword.length < 8) { setPwSaveState('error'); setPwSaveError('Password must be at least 8 characters'); return }
+    setPwSaveState('saving')
+    setPwSaveError('')
+    try {
+      const r = await fetch(`${API_URL}/auth/set-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
+        body: JSON.stringify({ password: newPassword }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (r.ok) { setPwSaveState('saved'); setNewPassword(''); setTimeout(() => setPwSaveState('idle'), 3000) }
+      else { setPwSaveState('error'); setPwSaveError(data.error || 'Could not save password') }
+    } catch { setPwSaveState('error'); setPwSaveError('Could not reach the server') }
+  }
+
   async function handleSendFeedback() {
     if (!feedbackText.trim()) return
     setFeedbackSending(true)
@@ -387,6 +406,27 @@ export default function Settings() {
             <Zap size={14} /> Upgrade to Pro — $10 one-time
           </button>
         )}
+        <div className="mb-3 p-3 rounded-xl border border-slate-700/40 bg-slate-800/30 space-y-2">
+          <div className="text-sm font-medium text-slate-200">{user?.hasPassword ? 'Change password' : 'Set a password'}</div>
+          <p className="text-xs text-slate-500">
+            {user?.hasPassword
+              ? 'Used to sign in with your email on any device.'
+              : 'Add a password so you can sign in with your email directly — no Google or email link needed.'}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              placeholder="New password (min 8 characters)"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              className="input flex-1 text-sm"
+            />
+            <button onClick={handleSetPassword} disabled={pwSaveState === 'saving' || !newPassword} className="btn-secondary text-xs px-3 disabled:opacity-40">
+              {pwSaveState === 'saving' ? 'Saving…' : pwSaveState === 'saved' ? 'Saved ✓' : 'Save'}
+            </button>
+          </div>
+          {pwSaveState === 'error' && <p className="text-xs text-red-400">{pwSaveError}</p>}
+        </div>
         <button onClick={logout} className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20">
           Sign Out of RenewBell
         </button>

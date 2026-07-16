@@ -90,17 +90,29 @@ async function graphGet(tokens, path) {
   return res.json()
 }
 
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .slice(0, 5000)
+}
+
 async function scanOutlook(tokens, since) {
   if (!tokens) throw new Error('Not connected to Outlook')
   const fresh = await ensureFreshTokens(tokens)
 
-  // Note: $search and $filter cannot be combined in Graph API
+  // Graph API limitations: $search cannot be combined with $filter OR
+  // $orderby (the request 400s) — results come relevance-ranked, so the
+  // date cutoff and sorting both happen client-side below.
   const search = 'subscription OR renewal OR receipt OR billing OR payment OR invoice OR membership'
   const params = new URLSearchParams({
     $search: `"${search}"`,
     $top: '100',
-    $select: 'subject,from,receivedDateTime,bodyPreview',
-    $orderby: 'receivedDateTime desc',
+    $select: 'subject,from,receivedDateTime,bodyPreview,body,hasAttachments',
   })
 
   const data = await graphGet(fresh, `/me/messages?${params.toString()}`)
@@ -115,13 +127,27 @@ async function scanOutlook(tokens, since) {
     if (msg.receivedDateTime && new Date(msg.receivedDateTime) < cutoff) continue
     const subject = msg.subject || ''
     const from = msg.from?.emailAddress?.address || ''
-    const body = msg.bodyPreview || ''
+    // Full body text, not just the 255-char preview — amounts often sit
+    // further down (tables, footers) than the preview reaches
+    const body = htmlToText(msg.body?.content) || msg.bodyPreview || ''
     const parsed = parseEmail(subject, body, from)
-    // Require a detected amount so only invoice-like emails surface
+    if (!parsed.name) parsed.name = msg.from?.emailAddress?.name || ''
+    // Invoice-like emails (detected amount) always surface; emails with
+    // attachments surface too — the invoice may be a PDF we can't read,
+    // so let the user decide (marked low confidence, amount left blank)
     if (parsed.amount) {
       results.push({ ...parsed, emailDate: msg.receivedDateTime, subject, from, messageId: msg.id })
+    } else if (msg.hasAttachments) {
+      results.push({
+        ...parsed,
+        confidence: 'Low',
+        hasAttachment: true,
+        emailDate: msg.receivedDateTime, subject, from, messageId: msg.id,
+      })
     }
   }
+
+  results.sort((a, b) => new Date(b.emailDate) - new Date(a.emailDate))
 
   // Hand refreshed tokens back so the caller persists them
   return { results, updatedTokens: fresh !== tokens ? fresh : null }

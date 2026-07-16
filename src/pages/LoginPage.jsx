@@ -5,12 +5,16 @@ import { useAuth } from '../contexts/AuthContext'
 const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com'
 
 export default function LoginPage() {
-  const { loginWithGoogle, isAuthenticated, loading } = useAuth()
+  const { loginWithGoogle, handleAuthCallback, isAuthenticated, loading } = useAuth()
   const navigate = useNavigate()
   const [waking, setWaking] = useState(false)
   const [serverReady, setServerReady] = useState(false)
   const [mode, setMode] = useState('signin') // signin | signup
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwError, setPwError] = useState('')
+  const [useLink, setUseLink] = useState(false) // magic-link fallback instead of password
   const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
   const [emailError, setEmailError] = useState('')
   const [sentToExisting, setSentToExisting] = useState(false)
@@ -50,6 +54,24 @@ export default function LoginPage() {
     setWaking(true)
     await waitForServer()
     loginWithGoogle()
+  }
+
+  async function handlePasswordAuth(e) {
+    e.preventDefault()
+    setPwError('')
+    if (mode === 'signup' && password.length < 8) { setPwError('Password must be at least 8 characters'); return }
+    setPwBusy(true)
+    try {
+      const res = await fetch(`${API_URL}/auth/${mode === 'signup' ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.token) { handleAuthCallback(data.token); return }
+      setPwError(data.error || 'Something went wrong — please try again.')
+    } catch { setPwError('Could not reach the server — please try again.') }
+    setPwBusy(false)
   }
 
   async function handleEmailLogin(e) {
@@ -114,7 +136,7 @@ export default function LoginPage() {
                 {[['signin', 'Sign in'], ['signup', 'Create account']].map(([m, label]) => (
                   <button
                     key={m}
-                    onClick={() => { setMode(m); setEmailState('idle'); setEmailError('') }}
+                    onClick={() => { setMode(m); setEmailState('idle'); setEmailError(''); setPwError(''); setUseLink(false) }}
                     className={`flex-1 py-2 text-sm font-semibold transition-colors ${
                       mode === m ? 'bg-cyan-500/15 text-cyan-300 border-b-2 border-cyan-400' : 'text-slate-500 hover:text-slate-300'
                     }`}
@@ -144,20 +166,44 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-slate-800" />
               </div>
 
-              {emailState === 'sent' ? (
-                <div className="text-center py-2">
-                  <p className="text-sm text-emerald-400 font-medium">✉️ Check your inbox</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {mode === 'signup' && sentToExisting
-                      ? <>You already have an account — we sent a <span className="text-slate-300">sign-in link</span> to <span className="text-slate-300">{email}</span> instead.</>
-                      : mode === 'signup'
-                        ? <>We sent a confirmation link to <span className="text-slate-300">{email}</span> — click it to finish creating your account. Valid for 15 minutes.</>
-                        : <>We sent a sign-in link to <span className="text-slate-300">{email}</span>. It's valid for 15 minutes.</>}
-                  </p>
-                  <button onClick={() => setEmailState('idle')} className="text-xs text-cyan-500 underline mt-2">Use a different email</button>
-                </div>
+              {useLink ? (
+                emailState === 'sent' ? (
+                  <div className="text-center py-2">
+                    <p className="text-sm text-emerald-400 font-medium">✉️ Check your inbox</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {mode === 'signup' && sentToExisting
+                        ? <>You already have an account — we sent a <span className="text-slate-300">sign-in link</span> to <span className="text-slate-300">{email}</span> instead.</>
+                        : mode === 'signup'
+                          ? <>We sent a confirmation link to <span className="text-slate-300">{email}</span> — click it to finish creating your account. Valid for 15 minutes.</>
+                          : <>We sent a sign-in link to <span className="text-slate-300">{email}</span>. It's valid for 15 minutes.</>}
+                    </p>
+                    <button onClick={() => setEmailState('idle')} className="text-xs text-cyan-500 underline mt-2">Use a different email</button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleEmailLogin} className="space-y-2">
+                    <input
+                      type="email"
+                      required
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={emailState === 'sending' || !email.trim()}
+                      className="w-full px-6 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl transition-colors font-medium text-sm border border-slate-700"
+                    >
+                      {emailState === 'sending' ? 'Sending link…' : 'Email me a sign-in link'}
+                    </button>
+                    {emailError && <p className="text-xs text-red-400 text-center">{emailError}</p>}
+                    <button type="button" onClick={() => { setUseLink(false); setEmailError('') }} className="w-full text-xs text-slate-500 hover:text-slate-300 pt-1">
+                      ← Back to password {mode === 'signup' ? 'sign-up' : 'sign-in'}
+                    </button>
+                  </form>
+                )
               ) : (
-                <form onSubmit={handleEmailLogin} className="space-y-2">
+                <form onSubmit={handlePasswordAuth} className="space-y-2">
                   <input
                     type="email"
                     required
@@ -166,14 +212,26 @@ export default function LoginPage() {
                     onChange={e => setEmail(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/60"
                   />
+                  <input
+                    type="password"
+                    required
+                    minLength={mode === 'signup' ? 8 : undefined}
+                    placeholder={mode === 'signup' ? 'Choose a password (min 8 characters)' : 'Password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500/60"
+                  />
                   <button
                     type="submit"
-                    disabled={emailState === 'sending' || !email.trim()}
-                    className="w-full px-6 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl transition-colors font-medium text-sm border border-slate-700"
+                    disabled={pwBusy || !email.trim() || !password}
+                    className="w-full px-6 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-xl transition-colors font-semibold text-sm"
                   >
-                    {emailState === 'sending' ? 'Sending link…' : mode === 'signup' ? 'Create account with email' : 'Email me a sign-in link'}
+                    {pwBusy ? 'Working…' : mode === 'signup' ? 'Create account' : 'Sign in'}
                   </button>
-                  {emailError && <p className="text-xs text-red-400 text-center">{emailError}</p>}
+                  {pwError && <p className="text-xs text-red-400 text-center">{pwError}</p>}
+                  <button type="button" onClick={() => { setUseLink(true); setPwError(''); setEmailState('idle') }} className="w-full text-xs text-slate-500 hover:text-cyan-400 pt-1">
+                    {mode === 'signup' ? 'Prefer no password? Email me a link instead' : 'Forgot password? Email me a sign-in link'}
+                  </button>
                 </form>
               )}
 

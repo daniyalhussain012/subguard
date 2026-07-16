@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
@@ -84,6 +85,58 @@ setInterval(() => {
   const now = Date.now();
   for (const [jti, exp] of usedCodes) if (exp < now) usedCodes.delete(jti);
 }, 60000).unref();
+
+// ── Email + password sign-up / sign-in ───────────────────────────────────────
+// The primary non-Google flow: register once with a password, then sign in
+// with it any time (no link required). The magic link remains as the
+// "forgot password / passwordless" fallback.
+
+const issueSession = (user) => jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+router.post('/register', async (req, res) => {
+  try {
+    const email = (req.body.email || '').toString().trim().toLowerCase();
+    const password = (req.body.password || '').toString();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    // Never attach a password to an existing account from the login page —
+    // that would let anyone who knows an email hijack it. Existing accounts
+    // set passwords from Settings (authenticated).
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(409).json({ error: 'An account with this email already exists — sign in instead.' });
+    const user = await User.create({
+      googleId: `email:${email}`,
+      email,
+      name: email.split('@')[0],
+      passwordHash: await bcrypt.hash(password, 10),
+    });
+    notifyAdmin('🎉 New RenewBell signup (password)', `${email} just signed up with email + password.`);
+    res.json({ token: issueSession(user) });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const email = (req.body.email || '').toString().trim().toLowerCase();
+    const password = (req.body.password || '').toString();
+    const user = await User.findOne({ email });
+    if (!user) return res.status(401).json({ error: 'No account found with this email.' });
+    if (!user.passwordHash) return res.status(401).json({ error: 'This account has no password — use Google or the email link, then set one in Settings.' });
+    if (!(await bcrypt.compare(password, user.passwordHash))) return res.status(401).json({ error: 'Incorrect password.' });
+    res.json({ token: issueSession(user) });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Authenticated: set or change the password (also how Google/magic-link
+// accounts add one)
+router.post('/set-password', authMiddleware, async (req, res) => {
+  try {
+    const password = (req.body.password || '').toString();
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    await User.updateOne({ _id: req.user._id }, { passwordHash: await bcrypt.hash(password, 10) });
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
 
 // ── Email (magic link) sign-in — for users without a Google account ─────────
 router.post('/email/start', async (req, res) => {
@@ -193,7 +246,7 @@ router.get('/me', authMiddleware, async (req, res) => {
       user = await User.findByIdAndUpdate(user._id, { plan: 'free' }, { new: true });
     }
     const { _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt } = user;
-    res.json({ id: _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt });
+    res.json({ id: _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt, hasPassword: !!user.passwordHash });
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 router.post('/logout', (req, res) => res.json({ message: 'Logged out' }));
