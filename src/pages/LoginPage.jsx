@@ -9,9 +9,11 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const [waking, setWaking] = useState(false)
   const [serverReady, setServerReady] = useState(false)
+  const [mode, setMode] = useState('signin') // signin | signup
   const [email, setEmail] = useState('')
   const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
   const [emailError, setEmailError] = useState('')
+  const [sentToExisting, setSentToExisting] = useState(false)
   const linkError = new URLSearchParams(window.location.search).get('error') === 'email_link_invalid'
 
   useEffect(() => {
@@ -59,10 +61,10 @@ export default function LoginPage() {
       const res = await fetch(`${API_URL}/auth/email/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), mode }),
       })
       const data = await res.json().catch(() => ({}))
-      if (res.ok) setEmailState('sent')
+      if (res.ok) { setSentToExisting(!!data.existing); setEmailState('sent') }
       else { setEmailState('error'); setEmailError(data.error || 'Could not send the link. Try again.') }
     } catch {
       setEmailState('error')
@@ -106,6 +108,22 @@ export default function LoginPage() {
             </div>
           ) : (
             <>
+              {/* Sign in / Create account tabs — same backends, but sign-in
+                  refuses unknown emails instead of silently creating accounts */}
+              <div className="flex rounded-xl border border-slate-800 overflow-hidden mb-5">
+                {[['signin', 'Sign in'], ['signup', 'Create account']].map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => { setMode(m); setEmailState('idle'); setEmailError('') }}
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                      mode === m ? 'bg-cyan-500/15 text-cyan-300 border-b-2 border-cyan-400' : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <button
                 onClick={handleLogin}
                 className="w-full flex items-center justify-center gap-3 px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 rounded-xl transition-colors font-medium shadow-sm"
@@ -116,7 +134,7 @@ export default function LoginPage() {
                   <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
                   <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
-                Continue with Google
+                {mode === 'signup' ? 'Sign up with Google' : 'Continue with Google'}
               </button>
 
               {/* Email magic-link sign-in for non-Google users */}
@@ -129,7 +147,13 @@ export default function LoginPage() {
               {emailState === 'sent' ? (
                 <div className="text-center py-2">
                   <p className="text-sm text-emerald-400 font-medium">✉️ Check your inbox</p>
-                  <p className="text-xs text-slate-500 mt-1">We sent a sign-in link to <span className="text-slate-300">{email}</span>. It's valid for 15 minutes.</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {mode === 'signup' && sentToExisting
+                      ? <>You already have an account — we sent a <span className="text-slate-300">sign-in link</span> to <span className="text-slate-300">{email}</span> instead.</>
+                      : mode === 'signup'
+                        ? <>We sent a confirmation link to <span className="text-slate-300">{email}</span> — click it to finish creating your account. Valid for 15 minutes.</>
+                        : <>We sent a sign-in link to <span className="text-slate-300">{email}</span>. It's valid for 15 minutes.</>}
+                  </p>
                   <button onClick={() => setEmailState('idle')} className="text-xs text-cyan-500 underline mt-2">Use a different email</button>
                 </div>
               ) : (
@@ -147,7 +171,7 @@ export default function LoginPage() {
                     disabled={emailState === 'sending' || !email.trim()}
                     className="w-full px-6 py-2.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 rounded-xl transition-colors font-medium text-sm border border-slate-700"
                   >
-                    {emailState === 'sending' ? 'Sending link…' : 'Email me a sign-in link'}
+                    {emailState === 'sending' ? 'Sending link…' : mode === 'signup' ? 'Create account with email' : 'Email me a sign-in link'}
                   </button>
                   {emailError && <p className="text-xs text-red-400 text-center">{emailError}</p>}
                 </form>

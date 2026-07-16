@@ -90,6 +90,13 @@ router.post('/email/start', async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+    // Sign-in and sign-up are separate flows: signing in to an email nobody
+    // registered should say so, not silently create an account.
+    const mode = req.body.mode === 'signup' ? 'signup' : 'signin';
+    const existing = await User.findOne({ email });
+    if (mode === 'signin' && !existing) {
+      return res.status(404).json({ error: 'No account found with this email. Switch to "Create account" to sign up first.' });
+    }
     const token = jwt.sign(
       { email, magic: true, jti: crypto.randomUUID() },
       process.env.JWT_SECRET,
@@ -102,19 +109,26 @@ router.post('/email/start', async (req, res) => {
     // survives until the real user's browser opens it.
     const frontend = (process.env.FRONTEND_URL || 'https://renewbell.app').replace(/\/$/, '');
     const link = `${frontend}/auth/email#t=${token}`;
+    // Creating an account vs signing in gets matching email copy; a signup
+    // attempt for an existing account just gets a sign-in link (the client
+    // is told via `existing` so it can explain).
+    const creating = mode === 'signup' && !existing;
+    const subject = creating ? 'Create your RenewBell account' : 'Your RenewBell sign-in link';
+    const action = creating ? 'create your account' : 'sign in';
+    const button = creating ? 'Create my account' : 'Sign in to RenewBell';
     const ok = await sendEmail(
       email,
-      'Your RenewBell sign-in link',
-      `Click to sign in to RenewBell (link is valid for 15 minutes):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
+      subject,
+      `Click to ${action} (link is valid for 15 minutes):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
       `<div style="font-family:sans-serif;max-width:480px">
-        <h2 style="color:#0F172A">Sign in to RenewBell</h2>
-        <p>Click the button below to sign in. This link is valid for <strong>15 minutes</strong> and can be used once.</p>
-        <p style="margin:24px 0"><a href="${link}" style="background:#06B6D4;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:bold">Sign in to RenewBell</a></p>
+        <h2 style="color:#0F172A">${creating ? 'Welcome to RenewBell' : 'Sign in to RenewBell'}</h2>
+        <p>Click the button below to ${action}. This link is valid for <strong>15 minutes</strong> and can be used once.</p>
+        <p style="margin:24px 0"><a href="${link}" style="background:#06B6D4;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:bold">${button}</a></p>
         <p style="color:#64748B;font-size:13px">If you didn't request this, you can safely ignore this email.</p>
       </div>`
     );
     if (!ok) return res.status(503).json({ error: 'Could not send email right now. Please try again.' });
-    res.json({ ok: true });
+    res.json({ ok: true, existing: !!existing });
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 

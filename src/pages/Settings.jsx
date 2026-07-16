@@ -77,8 +77,8 @@ export default function Settings() {
       .then(d => { if (d) setAdminData(d) })
       .catch(() => {})
   }, [])
-  const [testPushState, setTestPushState] = useState('idle') // idle | sending | sent | failed
-  const [testPushError, setTestPushError] = useState('')
+  const [testPushState, setTestPushState] = useState('idle') // idle | sending
+  const [testPushResult, setTestPushResult] = useState(null) // { stage, localShown, sent, devices, serverError }
   const [excelBusy, setExcelBusy] = useState(false)
   const [excelMsg, setExcelMsg] = useState(null) // { ok, text }
   const [installPrompt, setInstallPrompt] = useState(null)
@@ -181,29 +181,49 @@ export default function Settings() {
     window.location.reload()
   }
 
+  // Two-stage diagnostic so "no notification appeared" pinpoints WHICH layer
+  // failed: a local browser notification (no server involved — if this one
+  // doesn't appear, the OS is muting the browser), then a real end-to-end
+  // push through the server.
   async function handleTestPush() {
     setTestPushState('sending')
-    setTestPushError('')
+    setTestPushResult(null)
     try {
-      // Re-register THIS device first so the test provably covers the device
-      // the user is looking at, not just previously registered ones
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        await subscribeToPush().catch(() => {})
-      }
+      if (typeof Notification === 'undefined') { setTestPushResult({ stage: 'unsupported' }); setTestPushState('idle'); return }
+      let perm = Notification.permission
+      if (perm === 'default') perm = await Notification.requestPermission()
+      if (perm !== 'granted') { setTestPushResult({ stage: 'blocked' }); setTestPushState('idle'); return }
+      setNotifStatus('granted')
+
+      // Stage 1: local notification straight from the service worker
+      let localShown = false
+      try {
+        const reg = await navigator.serviceWorker.ready
+        await reg.showNotification('🔔 RenewBell test 1 of 2', {
+          body: 'This one came straight from your browser — no server involved.',
+          icon: '/icon-192.png',
+          tag: 'renewbell-local-test',
+        })
+        localShown = true
+      } catch {}
+
+      // Stage 2: register this device, then a real push through the server
+      await subscribeToPush().catch(() => {})
+      setPushSubscribed(true)
       const r = await fetch(`${API_URL}/api/push/test`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` },
       })
       const data = await r.json().catch(() => ({}))
-      if (r.ok && data.ok && data.sent > 0) {
-        setTestPushState('sent')
-        setTestPushError(`${data.sent}`) // reuse field to carry the device count
-      } else {
-        setTestPushState('failed')
-        setTestPushError(data.error || (data.sent === 0 ? 'No devices registered — toggle push off and on, then retry.' : ''))
-      }
-    } catch { setTestPushState('failed') }
-    setTimeout(() => setTestPushState('idle'), 8000)
+      setTestPushResult({
+        stage: 'done',
+        localShown,
+        sent: data.sent || 0,
+        devices: data.devices || 0,
+        serverError: data.ok ? '' : (data.error || ''),
+      })
+    } catch { setTestPushResult({ stage: 'error' }) }
+    setTestPushState('idle')
   }
 
   async function handleExportExcel() {
@@ -473,19 +493,31 @@ export default function Settings() {
                 <Bell size={14} />
                 {pushLoading ? 'Working...' : pushSubscribed ? 'Disable Background Push' : 'Enable Background Push (recommended)'}
               </button>
-              {pushSubscribed && (
-                <>
-                  <button onClick={handleTestPush} disabled={testPushState === 'sending'} className="btn-secondary w-full justify-center">
-                    🔔 {testPushState === 'sending' ? 'Sending…' : 'Send Test Notification'}
-                  </button>
-                  {testPushState === 'sent' && (
-                    <p className="text-xs text-emerald-400 text-center">
-                      Sent to {testPushError} device{testPushError !== '1' ? 's' : ''} — it should pop up within seconds.
-                      <span className="block text-slate-500 mt-1">Nothing appeared? Check your OS notification settings for this browser (Windows Focus Assist / macOS Focus mute them silently).</span>
-                    </p>
-                  )}
-                  {testPushState === 'failed' && <p className="text-xs text-red-400 text-center">{testPushError || 'Could not send — try disabling and re-enabling push.'}</p>}
-                </>
+              <button onClick={handleTestPush} disabled={testPushState === 'sending'} className="btn-secondary w-full justify-center">
+                🔔 {testPushState === 'sending' ? 'Testing…' : 'Send Test Notification'}
+              </button>
+              {testPushResult?.stage === 'done' && (
+                <div className="text-xs p-3 bg-slate-800/40 border border-slate-700/40 rounded-lg space-y-1.5">
+                  <p className={testPushResult.localShown ? 'text-emerald-400' : 'text-red-400'}>
+                    1. Browser notification: {testPushResult.localShown ? 'shown — "RenewBell test 1 of 2" should have just popped up.' : 'FAILED to display.'}
+                  </p>
+                  <p className={testPushResult.sent > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                    2. Server push: {testPushResult.sent > 0
+                      ? `delivered to ${testPushResult.sent} of ${testPushResult.devices} device${testPushResult.devices !== 1 ? 's' : ''} — "test 2 of 2" arrives within seconds.`
+                      : `failed${testPushResult.serverError ? ` — ${testPushResult.serverError}` : ''}`}
+                  </p>
+                  <p className="text-slate-500 pt-1 border-t border-slate-700/40">
+                    Tests pass but you see nothing pop up? Your operating system is muting the browser:
+                    on <strong className="text-slate-400">Windows</strong> — Settings → System → Notifications → turn ON for your browser, and turn OFF "Do not disturb" / Focus Assist.
+                    On <strong className="text-slate-400">macOS</strong> — System Settings → Notifications → your browser → Allow.
+                  </p>
+                </div>
+              )}
+              {testPushResult?.stage === 'blocked' && (
+                <p className="text-xs text-red-400 text-center">Notifications are blocked for this site — click the padlock in the address bar → Notifications → Allow, then retry.</p>
+              )}
+              {testPushResult?.stage === 'error' && (
+                <p className="text-xs text-red-400 text-center">Test failed to run — refresh the page and try again.</p>
               )}
             </div>
           ) : notifStatus !== 'denied' && notifStatus !== 'unsupported' ? (
