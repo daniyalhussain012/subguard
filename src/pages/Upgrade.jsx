@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ShieldCheck, Check, Zap, Crown, Star, ArrowLeft, Lock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useApp } from '../App'
+import { isAndroidApp } from '../utils/platform'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://subguard-api-cug1.onrender.com'
 
@@ -37,6 +38,7 @@ export default function Upgrade() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [justUpgraded, setJustUpgraded] = useState(false)
+  const androidApp = isAndroidApp()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -95,8 +97,12 @@ export default function Upgrade() {
         <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-cyan-500/20">
           <ShieldCheck size={22} className="text-white" />
         </div>
-        <h1 className="text-2xl font-bold text-slate-100 mb-2">Upgrade to RenewBell Pro</h1>
-        <p className="text-slate-400 text-sm">One-time payment · No subscription · No recurring fees · 3 years of access</p>
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">RenewBell Pro</h1>
+        <p className="text-slate-400 text-sm">
+          {androidApp
+            ? 'Unlock every feature. Manage your plan from your account on the web.'
+            : 'One-time payment · No subscription · No recurring fees · 3 years of access'}
+        </p>
       </div>
 
       <div className={`card p-4 mb-6 flex items-center justify-between gap-4 ${activeSubs >= 5 ? 'border border-red-500/30' : ''}`}>
@@ -147,11 +153,15 @@ export default function Upgrade() {
             <Zap size={17} className="text-cyan-400" />
             <h2 className="font-bold text-cyan-300">Pro</h2>
           </div>
-          <div className="flex items-end gap-1.5 mb-0.5">
-            <span className="text-3xl font-bold text-slate-100">$10</span>
-            <span className="text-slate-400 text-sm mb-1">one-time</span>
-          </div>
-          <p className="text-[11px] text-slate-600 mb-4">Pay once, 3 years of access. No recurring charges.</p>
+          {!androidApp && (
+            <>
+              <div className="flex items-end gap-1.5 mb-0.5">
+                <span className="text-3xl font-bold text-slate-100">$10</span>
+                <span className="text-slate-400 text-sm mb-1">one-time</span>
+              </div>
+              <p className="text-[11px] text-slate-600 mb-4">Pay once, 3 years of access. No recurring charges.</p>
+            </>
+          )}
           <div className="space-y-2 mb-6">
             {PRO_FEATURES.map(f => (
               <div key={f} className="flex items-center gap-2 text-sm text-slate-300">
@@ -159,14 +169,26 @@ export default function Upgrade() {
               </div>
             ))}
           </div>
-          {error && <p className="text-xs text-red-400 mb-2 text-center">{error}</p>}
-          <button onClick={handleUpgrade} disabled={loading} className="btn-primary w-full justify-center py-2.5 text-sm font-bold">
-            <Zap size={15} />
-            {loading ? 'Opening checkout…' : 'Upgrade for $10'}
-          </button>
-          <p className="text-[10px] text-slate-600 text-center mt-2 flex items-center justify-center gap-1">
-            <Star size={10} className="text-slate-600" /> Secure checkout via Stripe
-          </p>
+          {androidApp ? (
+            <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 text-center space-y-1.5">
+              <p className="text-sm font-semibold text-cyan-300">Upgrade on the web</p>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Get Pro at <span className="text-slate-200 font-medium">renewbell.app</span>, then sign in here with the
+                same account — Pro unlocks automatically across all your devices.
+              </p>
+            </div>
+          ) : (
+            <>
+              {error && <p className="text-xs text-red-400 mb-2 text-center">{error}</p>}
+              <button onClick={handleUpgrade} disabled={loading} className="btn-primary w-full justify-center py-2.5 text-sm font-bold">
+                <Zap size={15} />
+                {loading ? 'Opening checkout…' : 'Upgrade for $10'}
+              </button>
+              <p className="text-[10px] text-slate-600 text-center mt-2 flex items-center justify-center gap-1">
+                <Star size={10} className="text-slate-600" /> Secure checkout via Stripe
+              </p>
+            </>
+          )}
         </motion.div>
       </div>
 

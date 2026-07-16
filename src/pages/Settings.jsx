@@ -6,6 +6,7 @@ import { useApp } from '../App'
 import { useAuth } from '../contexts/AuthContext'
 import { AVATAR_OPTIONS, defaultSettings } from '../utils/storage'
 import { requestNotificationPermission, subscribeToPush, unsubscribeFromPush, getPushSubscriptionStatus } from '../utils/notifications'
+import { isAndroidApp } from '../utils/platform'
 
 function Toggle({ value, onChange }) {
   return (
@@ -403,7 +404,7 @@ export default function Settings() {
         </div>
         {!isPremium && (
           <button onClick={() => navigate('/upgrade')} className="btn-primary w-full justify-center text-sm mb-2">
-            <Zap size={14} /> Upgrade to Pro — $10 one-time
+            <Zap size={14} /> {isAndroidApp() ? 'Unlock RenewBell Pro' : 'Upgrade to Pro — $10 one-time'}
           </button>
         )}
         <div className="mb-3 p-3 rounded-xl border border-slate-700/40 bg-slate-800/30 space-y-2">

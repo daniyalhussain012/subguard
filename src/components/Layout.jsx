@@ -10,6 +10,7 @@ import {
 import { useApp } from '../App'
 import { useAuth } from '../contexts/AuthContext'
 import { getNotificationBadgeCount } from '../utils/notifications'
+import { isAndroidApp } from '../utils/platform'
 
 const PRIMARY_NAV = [
   { to: '/', label: 'Command Center', icon: LayoutDashboard, end: true },
@@ -228,7 +229,7 @@ export default function Layout() {
                       <Icon size={18} /><span>{label}</span>
                     </NavLink>
                   ))}
-                  {!isPremium && (
+                  {!isPremium && !isAndroidApp() && (
                     <NavLink to="/upgrade" onClick={() => setMoreOpen(false)}
                       className="flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold bg-amber-500/10 text-amber-400 col-span-2"
                     >

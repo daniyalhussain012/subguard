@@ -10,6 +10,7 @@ import {
   CATEGORIES, BILLING_CYCLES, STATUSES, IMPORTANCE,
   formatCurrency, getMonthlyAmount
 } from '../utils/storage'
+import { isAndroidApp } from '../utils/platform'
 import ServiceAutocomplete from '../components/ServiceAutocomplete'
 
 const REMINDER_OPTIONS = [
@@ -149,10 +150,12 @@ export default function AddEditSubscription() {
           <div className="text-4xl">🔒</div>
           <h2 className="font-bold text-slate-100">You've reached the free limit of {FREE_LIMIT} subscriptions</h2>
           <p className="text-sm text-slate-400">
-            Upgrade to Pro to track unlimited subscriptions, plus email scanning, money-leak detection, and more — $10 one-time for 3 years.
+            {isAndroidApp()
+              ? 'RenewBell Pro unlocks unlimited subscriptions, plus email scanning, money-leak detection, and more.'
+              : 'Upgrade to Pro to track unlimited subscriptions, plus email scanning, money-leak detection, and more — $10 one-time for 3 years.'}
           </p>
           <button onClick={() => navigate('/upgrade')} className="btn-primary justify-center mx-auto">
-            Upgrade to Pro
+            {isAndroidApp() ? 'See RenewBell Pro' : 'Upgrade to Pro'}
           </button>
         </div>
       </div>
