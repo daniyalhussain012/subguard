@@ -204,12 +204,6 @@ function EmailConnectCard({ provider, status, onConnect, onDisconnect, onScan, s
       <a href={connectUrl} className="btn-primary w-full justify-center">
         <ExternalLink size={14} /> Connect {label}
       </a>
-      {isGmail && (
-        <div className="card bg-slate-800/50 border-slate-700/40 p-3 text-xs text-slate-500 space-y-1">
-          <p className="text-slate-400 font-semibold flex items-center gap-1"><Info size={11} /> "App not verified" warning?</p>
-          <p>This is normal for apps pending Google review. Click <strong className="text-slate-300">Advanced</strong> → <strong className="text-slate-300">"Go to app (unsafe)"</strong> to continue. Your emails are never stored.</p>
-        </div>
-      )}
       <p className="text-xs text-slate-600 text-center">Read-only · Only detected subscription details are stored, never your emails · Disconnect anytime</p>
     </div>
   )

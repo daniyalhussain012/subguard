@@ -94,6 +94,15 @@ function detectServiceName(text) {
   return null
 }
 
+// Distinguishes a real invoice/receipt/renewal confirmation from a marketing
+// email that merely mentions a price. Promos say "Subscribe for $9.99!";
+// invoices say "you were charged", "payment received", "renews on", etc.
+const INVOICE_SIGNAL = /\b(invoice|receipt|you (?:paid|were charged|have been charged)|we(?:'ve| have)? charged|has been charged|was charged|will be charged|charged to your|payment (?:received|confirmation|successful|of|to)|order confirmation|purchase confirmation|thank you for your (?:payment|order|purchase|subscription)|billing statement|your subscription (?:to|has|will|renews)|renews? (?:on|automatically|soon)|will (?:renew|auto-renew)|auto-?renew|amount (?:paid|charged|due)|total (?:paid|charged|due|amount))\b/i
+
+function looksLikeInvoice(text) {
+  return INVOICE_SIGNAL.test(text || '')
+}
+
 function detectConfidence(result) {
   let score = 0
   if (result.name) score += 2
@@ -141,4 +150,4 @@ function parseEmail(subject, body, sender) {
   return result
 }
 
-module.exports = { parseEmail }
+module.exports = { parseEmail, looksLikeInvoice }

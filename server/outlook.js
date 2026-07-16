@@ -1,6 +1,6 @@
 'use strict'
 
-const { parseEmail } = require('./emailParser')
+const { parseEmail, looksLikeInvoice } = require('./emailParser')
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 const AUTH_BASE = 'https://login.microsoftonline.com/consumers/oauth2/v2.0'
@@ -101,6 +101,17 @@ function htmlToText(html) {
     .slice(0, 5000)
 }
 
+// True only if the message carries a genuine PDF attachment — not an inline
+// image (logos/signatures make hasAttachments true on most marketing mail).
+async function hasPdfAttachment(tokens, messageId) {
+  try {
+    const data = await graphGet(tokens, `/me/messages/${messageId}/attachments?$select=name,contentType,isInline`)
+    return (data.value || []).some(a =>
+      !a.isInline && (a.contentType === 'application/pdf' || /\.pdf$/i.test(a.name || ''))
+    )
+  } catch { return false }
+}
+
 async function scanOutlook(tokens, since) {
   if (!tokens) throw new Error('Not connected to Outlook')
   const fresh = await ensureFreshTokens(tokens)
@@ -123,6 +134,10 @@ async function scanOutlook(tokens, since) {
   fallback.setMonth(fallback.getMonth() - 6)
   const cutoff = since ? new Date(since) : fallback
 
+  // $search matches keywords anywhere in the body, so it returns far more
+  // than real invoices — apply Gmail-grade precision on top: surface ONLY
+  // (a) emails whose body reads like an invoice (amount + invoice wording),
+  // or (b) emails carrying a genuine PDF attachment (the invoice itself).
   for (const msg of data.value || []) {
     if (msg.receivedDateTime && new Date(msg.receivedDateTime) < cutoff) continue
     const subject = msg.subject || ''
@@ -130,16 +145,21 @@ async function scanOutlook(tokens, since) {
     // Full body text, not just the 255-char preview — amounts often sit
     // further down (tables, footers) than the preview reaches
     const body = htmlToText(msg.body?.content) || msg.bodyPreview || ''
+    const fullText = `${subject}\n${body}`
     const parsed = parseEmail(subject, body, from)
     if (!parsed.name) parsed.name = msg.from?.emailAddress?.name || ''
-    // Invoice-like emails (detected amount) always surface; emails with
-    // attachments surface too — the invoice may be a PDF we can't read,
-    // so let the user decide (marked low confidence, amount left blank)
-    if (parsed.amount) {
+
+    const invoiceLike = parsed.amount && looksLikeInvoice(fullText)
+    if (invoiceLike) {
       results.push({ ...parsed, emailDate: msg.receivedDateTime, subject, from, messageId: msg.id })
-    } else if (msg.hasAttachments) {
+      continue
+    }
+    // No invoice-like body — only keep it if it has a real PDF attached
+    // (skip inline images). One extra Graph call per attachment-bearing mail.
+    if (msg.hasAttachments && await hasPdfAttachment(fresh, msg.id)) {
       results.push({
         ...parsed,
+        amount: parsed.amount || undefined,
         confidence: 'Low',
         hasAttachment: true,
         emailDate: msg.receivedDateTime, subject, from, messageId: msg.id,
