@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.renewbell.app",
+      "sha256_cert_fingerprints": [
+        "B6:4E:7E:6C:91:24:C4:9A:18:7C:CF:AB:5F:D4:B6:9A:A0:B7:E9:AA:4B:D3:25:AD:BA:CF:1F:98:6C:1A:E9:91"
+      ]
+    }
+  }
+]
