@@ -28,6 +28,9 @@ PushSubscription.syncIndexes().catch(err => console.error('[Startup] PushSubscri
 // Grandfather them in. Idempotent, so it's a no-op on every later boot.
 User.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerified: true } })
   .then(r => { if (r.modifiedCount) console.log(`[Startup] Grandfathered ${r.modifiedCount} pre-existing account(s) as email-verified.`); })
+  // Strictly after the backfill — otherwise grandfathered accounts would
+  // still read as unverified and the purge could delete real users.
+  .then(() => purgeUnverifiedAccounts())
   .catch(err => console.error('[Startup] emailVerified backfill failed:', err.message));
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.app').replace(/\/$/, '');
@@ -187,10 +190,13 @@ registerScanProvider('microsoft', 'outlook', outlook);
 app.get('/api/admin/users', authMiddleware, async (req, res) => {
   try {
     if (!authMiddleware.isAdminEmail(req.user.email)) return res.status(403).json({ error: 'Forbidden' });
-    const users = await User.find({}, 'name email plan createdAt premiumActivatedAt premiumExpiresAt')
+    // Only confirmed accounts are real signups. Unconfirmed ones can't sign
+    // in and get purged after a week — counting them would overstate growth.
+    const real = { emailVerified: true };
+    const users = await User.find(real, 'name email plan createdAt premiumActivatedAt premiumExpiresAt')
       .sort({ createdAt: -1 }).limit(200);
-    const total = await User.countDocuments();
-    const pro = await User.countDocuments({ plan: 'premium' });
+    const total = await User.countDocuments(real);
+    const pro = await User.countDocuments({ ...real, plan: 'premium' });
     const feedbackCount = await Feedback.countDocuments();
     res.json({ total, pro, free: total - pro, feedbackCount, users });
   } catch { res.status(500).json({ error: 'Server error' }); }
@@ -212,6 +218,38 @@ app.post('/api/feedback', authMiddleware, async (req, res) => {
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// ── Abandoned signup cleanup ──────────────────────────────────────────────────
+// A password signup that's never confirmed is inert — no session can ever be
+// issued for it — so past a grace period it's just noise in the database and
+// in the signup stats. Google and magic-link accounts are verified on
+// creation, and pre-existing accounts are grandfathered at startup, so this
+// only ever catches genuinely abandoned (or squatted) confirmations.
+const UNVERIFIED_TTL_DAYS = 7;
+
+async function purgeUnverifiedAccounts() {
+  try {
+    const cutoff = new Date(Date.now() - UNVERIFIED_TTL_DAYS * 86400000);
+    const stale = await User.find({ emailVerified: false, createdAt: { $lt: cutoff } }, '_id');
+    if (!stale.length) return 0;
+    const ids = stale.map(u => u._id);
+    // These accounts can't sign in, so they shouldn't own any of this —
+    // clear it defensively rather than risk orphaned rows.
+    await Promise.all([
+      Subscription.deleteMany({ user: { $in: ids } }),
+      PushSubscription.deleteMany({ user: { $in: ids } }),
+      EmailToken.deleteMany({ user: { $in: ids } }),
+    ]);
+    await User.deleteMany({ _id: { $in: ids } });
+    console.log(`[Cleanup] Purged ${ids.length} unconfirmed account(s) older than ${UNVERIFIED_TTL_DAYS} days.`);
+    return ids.length;
+  } catch (err) {
+    console.error('[Cleanup] Unverified purge failed:', err.message);
+    return 0;
+  }
+}
+
+cron.schedule('30 3 * * *', purgeUnverifiedAccounts);
 
 // ── Daily push notification cron ──────────────────────────────────────────────
 
