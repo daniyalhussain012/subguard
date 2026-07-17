@@ -23,6 +23,13 @@ connectDB();
 // (unique index on `user` alone would reject a second device).
 PushSubscription.syncIndexes().catch(err => console.error('[Startup] PushSubscription index sync failed:', err.message));
 
+// Accounts created before email verification existed have no emailVerified
+// field, which would read as false and lock them out of password sign-in.
+// Grandfather them in. Idempotent, so it's a no-op on every later boot.
+User.updateMany({ emailVerified: { $exists: false } }, { $set: { emailVerified: true } })
+  .then(r => { if (r.modifiedCount) console.log(`[Startup] Grandfathered ${r.modifiedCount} pre-existing account(s) as email-verified.`); })
+  .catch(err => console.error('[Startup] emailVerified backfill failed:', err.message));
+
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://subguard-five.vercel.app').replace(/\/$/, '');
 
 // Allow both the old and new app domains during the RenewBell transition,

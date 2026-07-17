@@ -14,6 +14,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [pwBusy, setPwBusy] = useState(false)
   const [pwError, setPwError] = useState('')
+  const [verifySent, setVerifySent] = useState(false)   // signup done, awaiting confirmation
+  const [needsVerify, setNeedsVerify] = useState(false) // sign-in blocked until confirmed
+  const [resendState, setResendState] = useState('idle')
   const [useLink, setUseLink] = useState(false) // magic-link fallback instead of password
   const [emailState, setEmailState] = useState('idle') // idle | sending | sent | error
   const [emailError, setEmailError] = useState('')
@@ -59,6 +62,7 @@ export default function LoginPage() {
   async function handlePasswordAuth(e) {
     e.preventDefault()
     setPwError('')
+    setNeedsVerify(false)
     if (mode === 'signup' && password.length < 8) { setPwError('Password must be at least 8 characters'); return }
     setPwBusy(true)
     try {
@@ -69,9 +73,24 @@ export default function LoginPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok && data.token) { handleAuthCallback(data.token); return }
+      // Signup succeeded but the account is inert until the emailed link is opened
+      if (res.ok && data.verificationRequired) { setVerifySent(true); setPwBusy(false); return }
+      if (data.verificationRequired) setNeedsVerify(true) // sign-in on an unconfirmed account
       setPwError(data.error || 'Something went wrong — please try again.')
     } catch { setPwError('Could not reach the server — please try again.') }
     setPwBusy(false)
+  }
+
+  async function handleResendVerification() {
+    setResendState('sending')
+    try {
+      await fetch(`${API_URL}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+      setResendState('sent')
+    } catch { setResendState('idle') }
   }
 
   async function handleEmailLogin(e) {
@@ -166,7 +185,28 @@ export default function LoginPage() {
                 <div className="flex-1 h-px bg-slate-800" />
               </div>
 
-              {useLink ? (
+              {verifySent ? (
+                <div className="text-center py-2">
+                  <p className="text-sm text-emerald-400 font-medium">✉️ Confirm your email</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    We sent a confirmation link to <span className="text-slate-300">{email}</span>. Open it to activate your
+                    account — then you're in. The link is valid for 24 hours.
+                  </p>
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={resendState !== 'idle'}
+                    className="text-xs text-cyan-500 hover:text-cyan-400 underline mt-3 disabled:no-underline disabled:text-emerald-400"
+                  >
+                    {resendState === 'sent' ? '✓ Sent again' : resendState === 'sending' ? 'Sending…' : "Didn't get it? Resend"}
+                  </button>
+                  <button
+                    onClick={() => { setVerifySent(false); setResendState('idle'); setPassword('') }}
+                    className="block w-full text-xs text-slate-500 hover:text-slate-300 mt-3"
+                  >
+                    ← Use a different email
+                  </button>
+                </div>
+              ) : useLink ? (
                 emailState === 'sent' ? (
                   <div className="text-center py-2">
                     <p className="text-sm text-emerald-400 font-medium">✉️ Check your inbox</p>
@@ -229,6 +269,16 @@ export default function LoginPage() {
                     {pwBusy ? 'Working…' : mode === 'signup' ? 'Create account' : 'Sign in'}
                   </button>
                   {pwError && <p className="text-xs text-red-400 text-center">{pwError}</p>}
+                  {needsVerify && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendState !== 'idle'}
+                      className="w-full text-xs text-cyan-500 hover:text-cyan-400 underline disabled:no-underline disabled:text-emerald-400"
+                    >
+                      {resendState === 'sent' ? '✓ Confirmation link sent — check your inbox' : resendState === 'sending' ? 'Sending…' : 'Resend confirmation link'}
+                    </button>
+                  )}
                   <button type="button" onClick={() => { setUseLink(true); setPwError(''); setEmailState('idle') }} className="w-full text-xs text-slate-500 hover:text-cyan-400 pt-1">
                     {mode === 'signup' ? 'Prefer no password? Email me a link instead' : 'Forgot password? Email me a sign-in link'}
                   </button>

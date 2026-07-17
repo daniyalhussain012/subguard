@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import AuthCallbackPage from './pages/AuthCallback'
 import AuthEmailPage from './pages/AuthEmail'
+import AuthVerifyPage from './pages/AuthVerify'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -92,6 +93,7 @@ function AnimatedRoutes() {
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/auth/email" element={<AuthEmailPage />} />
+            <Route path="/auth/verify" element={<AuthVerifyPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
