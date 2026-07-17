@@ -13,6 +13,7 @@ import AuthCallbackPage from './pages/AuthCallback'
 import AuthEmailPage from './pages/AuthEmail'
 import AuthVerifyPage from './pages/AuthVerify'
 import PrivacyPolicy from './pages/PrivacyPolicy'
+import DeleteAccountInfo from './pages/DeleteAccount'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Subscriptions = lazy(() => import('./pages/Subscriptions'))
@@ -95,6 +96,7 @@ function AnimatedRoutes() {
             <Route path="/auth/email" element={<AuthEmailPage />} />
             <Route path="/auth/verify" element={<AuthVerifyPage />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/delete-account" element={<DeleteAccountInfo />} />
             <Route path="/" element={<AuthGate><Layout /></AuthGate>}>
               <Route index element={<Dashboard />} />
               <Route path="subscriptions" element={<Subscriptions />} />

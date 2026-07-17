@@ -78,7 +78,7 @@ export default function PrivacyPolicy() {
           <ul className="list-disc list-inside space-y-1">
             <li><strong className="text-slate-300">Export</strong> your data as a JSON file at any time from Settings</li>
             <li><strong className="text-slate-300">Disconnect</strong> Gmail or Outlook scanning at any time from the Smart Scanner page</li>
-            <li><strong className="text-slate-300">Delete your account</strong> permanently, including all server-side data, from Settings → Danger Zone</li>
+            <li><strong className="text-slate-300">Delete your account</strong> permanently, including all server-side data, from Settings → Danger Zone — see <Link to="/delete-account" className="text-cyan-500 hover:text-cyan-400 underline">how to delete your account</Link> for the full steps and what's retained</li>
           </ul>
           <p>If you have questions about your data or need help with a request, contact us using the details below.</p>
         </Section>

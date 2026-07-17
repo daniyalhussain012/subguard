@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const PushSubscription = require('../models/PushSubscription');
+const EmailToken = require('../models/EmailToken');
+const Feedback = require('../models/Feedback');
 const authMiddleware = require('../middleware/auth');
 const { notifyAdmin, sendEmail } = require('../notify');
 const router = express.Router();
@@ -367,8 +369,15 @@ router.post('/logout', (req, res) => res.json({ message: 'Logged out' }));
 router.delete('/me', authMiddleware, async (req, res) => {
   try {
     const userId = req.user._id;
-    await Subscription.deleteMany({ user: userId });
-    await PushSubscription.deleteOne({ user: userId });
+    await Promise.all([
+      Subscription.deleteMany({ user: userId }),
+      PushSubscription.deleteMany({ user: userId }),
+      // Live Gmail/Outlook OAuth tokens — leaving these behind would keep
+      // mailbox access for an account that no longer exists.
+      EmailToken.deleteMany({ user: userId }),
+      // Feedback carries the sender's email; drop it with the account.
+      Feedback.deleteMany({ user: userId }),
+    ]);
     await User.findByIdAndDelete(userId);
     res.json({ message: 'Account deleted' });
   } catch { res.status(500).json({ error: 'Server error' }); }
