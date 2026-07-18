@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const session = require('express-session');
 const passport = require('passport');
 const cron = require('node-cron');
@@ -13,11 +14,17 @@ const PushSubscription = require('./models/PushSubscription');
 const EmailToken = require('./models/EmailToken');
 const Feedback = require('./models/Feedback');
 const authMiddleware = require('./middleware/auth');
+const { globalLimiter } = require('./middleware/rateLimit');
 const { notifyAdmin } = require('./notify');
 const gmail = require('./gmail');
 const outlook = require('./outlook');
 
 const app = express();
+// Render terminates TLS at a proxy and forwards the client IP in
+// X-Forwarded-For. Trust exactly one hop so req.ip is the real client (per-IP
+// rate limiting depends on this) without trusting client-spoofed headers.
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 connectDB();
 // Drop stale indexes from the old one-device-per-user push design
 // (unique index on `user` alone would reject a second device).
@@ -51,6 +58,11 @@ app.use(cors({
   origin: (origin, cb) => cb(null, ALLOWED_ORIGINS.includes(origin)),
   credentials: true,
 }));
+
+// Security response headers (nosniff, referrer policy, frameguard, HSTS…).
+// CORP is relaxed to cross-origin because this API is consumed by the frontend
+// on a different origin; CORS above still governs who may read the responses.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // ── Stripe webhook (must come BEFORE json body parser) ───────────────────────
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -89,6 +101,11 @@ const sessionSecret = process.env.SESSION_SECRET || (() => {
 app.use(session({ secret: sessionSecret, resave: false, saveUninitialized: false }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Broad per-IP abuse backstop across the auth + API surface. The Stripe webhook
+// is registered above this line, so it stays exempt (it can burst on retries).
+// Tighter, endpoint-specific limits live inside routes/auth.js.
+app.use(['/auth', '/api'], globalLimiter);
 
 // ── App auth + subscriptions + stripe + push ──────────────────────────────────
 app.use('/auth', require('./routes/auth'));

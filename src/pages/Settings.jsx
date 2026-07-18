@@ -178,9 +178,22 @@ export default function Settings() {
     reader.readAsText(file)
   }
 
-  function handleClearData() {
-    if (!window.confirm('This will delete ALL your RenewBell data permanently. Are you sure?')) return
-    if (!window.confirm('This cannot be undone. Delete everything?')) return
+  async function handleClearData() {
+    if (!window.confirm('This erases your subscriptions, reminders, and settings from this device AND from our servers. Your account stays — this is a fresh start, not account deletion. Continue?')) return
+    if (!window.confirm('This cannot be undone. Erase all your data?')) return
+    // Wipe the server-side subscription mirror first. Without this, clearing
+    // localStorage and reloading does nothing visible: the app re-hydrates the
+    // subscriptions straight back from the server (see App.jsx hydration).
+    try {
+      const token = localStorage.getItem('subguard_token')
+      if (token) {
+        await fetch(`${API_URL}/api/subscriptions/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ subscriptions: [] }),
+        })
+      }
+    } catch { /* fall through — still clear locally */ }
     Object.values(activeKeys).forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
@@ -701,7 +714,7 @@ export default function Settings() {
 
       <Section icon={AlertCircle} title="Danger Zone">
         <p className="text-xs text-slate-500 mb-3">
-          Permanently delete your RenewBell account and all data associated with it — email, subscriptions, reminders, and push registration — from our servers. This is different from "Clear All My Data" above, which only clears your local device.
+          Permanently delete your RenewBell account and all data associated with it — email, subscriptions, reminders, and push registration — from our servers. This is different from "Clear All My Data" above, which erases your subscriptions and settings but keeps your account so you can start fresh.
         </p>
         <button onClick={handleDeleteAccount} disabled={deletingAccount} className="btn-danger w-full justify-center py-2.5 disabled:opacity-60">
           <Trash2 size={14} /> {deletingAccount ? 'Deleting Account…' : 'Delete My Account'}

@@ -10,6 +10,7 @@ const PushSubscription = require('../models/PushSubscription');
 const EmailToken = require('../models/EmailToken');
 const Feedback = require('../models/Feedback');
 const authMiddleware = require('../middleware/auth');
+const { emailLimiter, loginLimiter, tokenLimiter } = require('../middleware/rateLimit');
 const { notifyAdmin, sendEmail } = require('../notify');
 const router = express.Router();
 
@@ -143,7 +144,7 @@ async function sendVerificationEmail(email) {
   );
 }
 
-router.post('/register', async (req, res) => {
+router.post('/register', emailLimiter, async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
     const password = (req.body.password || '').toString();
@@ -188,7 +189,7 @@ router.post('/register', async (req, res) => {
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
     const password = (req.body.password || '').toString();
@@ -204,7 +205,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Redeem the emailed confirmation link, then sign the user straight in.
-router.post('/verify-email', async (req, res) => {
+router.post('/verify-email', tokenLimiter, async (req, res) => {
   try {
     const payload = jwt.verify(req.body.token, process.env.JWT_SECRET);
     if (!payload.verify || !payload.email) return res.status(400).json({ error: 'Invalid link' });
@@ -219,7 +220,7 @@ router.post('/verify-email', async (req, res) => {
   } catch { res.status(400).json({ error: 'That link is invalid or has expired — request a new one.' }); }
 });
 
-router.post('/resend-verification', async (req, res) => {
+router.post('/resend-verification', emailLimiter, async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
     const user = await User.findOne({ email });
@@ -243,7 +244,7 @@ router.post('/set-password', authMiddleware, async (req, res) => {
 });
 
 // ── Email (magic link) sign-in — for users without a Google account ─────────
-router.post('/email/start', async (req, res) => {
+router.post('/email/start', emailLimiter, async (req, res) => {
   try {
     const email = (req.body.email || '').toString().trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
@@ -317,7 +318,7 @@ async function redeemMagicToken(rawToken) {
 
 // Primary path: the frontend /auth/email page POSTs the fragment token here
 // and receives the session token directly — no redirect hops to break.
-router.post('/email/verify', async (req, res) => {
+router.post('/email/verify', tokenLimiter, async (req, res) => {
   try {
     const user = await redeemMagicToken(req.body.token);
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -340,7 +341,7 @@ router.get('/email/verify', async (req, res) => {
   }
 });
 
-router.post('/exchange', async (req, res) => {
+router.post('/exchange', tokenLimiter, async (req, res) => {
   try {
     const payload = jwt.verify(req.body.code, process.env.JWT_SECRET);
     if (!payload.otc || !payload.jti) return res.status(400).json({ error: 'Invalid code' });
