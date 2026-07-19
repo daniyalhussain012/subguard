@@ -15,7 +15,9 @@ const EmailToken = require('./models/EmailToken');
 const Feedback = require('./models/Feedback');
 const authMiddleware = require('./middleware/auth');
 const { globalLimiter } = require('./middleware/rateLimit');
-const { notifyAdmin } = require('./notify');
+const { countryFromRequest, timezoneFromRequest } = require('./geo');
+const { sendPushToUser } = require('./pushSender');
+const { notifyAdmin, sendEmail } = require('./notify');
 const gmail = require('./gmail');
 const outlook = require('./outlook');
 
@@ -202,6 +204,13 @@ function registerScanProvider(name, provider, mod) {
 registerScanProvider('google', 'gmail', gmail);
 registerScanProvider('microsoft', 'outlook', outlook);
 
+// User-authored text (feedback, replies) is interpolated into HTML emails, so
+// it must be escaped — otherwise a message containing markup would render as
+// live HTML in the recipient's mail client.
+const escapeHtml = (s = '') => s.toString()
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 // ── Admin: signup & subscription tracking ─────────────────────────────────────
 // Only accounts listed in ADMIN_EMAILS can read this.
 app.get('/api/admin/users', authMiddleware, async (req, res) => {
@@ -210,12 +219,86 @@ app.get('/api/admin/users', authMiddleware, async (req, res) => {
     // Only confirmed accounts are real signups. Unconfirmed ones can't sign
     // in and get purged after a week — counting them would overstate growth.
     const real = { emailVerified: true };
-    const users = await User.find(real, 'name email plan createdAt premiumActivatedAt premiumExpiresAt')
+    const users = await User.find(real, 'name email plan country timezone createdAt premiumActivatedAt premiumExpiresAt')
       .sort({ createdAt: -1 }).limit(200);
     const total = await User.countDocuments(real);
     const pro = await User.countDocuments({ ...real, plan: 'premium' });
     const feedbackCount = await Feedback.countDocuments();
-    res.json({ total, pro, free: total - pro, feedbackCount, users });
+    // Surfaced as a badge so unanswered feedback doesn't sit unnoticed.
+    const unansweredCount = await Feedback.countDocuments({ repliedAt: { $exists: false } });
+    res.json({ total, pro, free: total - pro, feedbackCount, unansweredCount, users });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Every feedback message with its reply state, newest first.
+app.get('/api/admin/feedback', authMiddleware, async (req, res) => {
+  try {
+    if (!authMiddleware.isAdminEmail(req.user.email)) return res.status(403).json({ error: 'Forbidden' });
+    const items = await Feedback.find().sort({ createdAt: -1 }).limit(200).lean();
+    // The stored email/plan are a snapshot from submission time; join the live
+    // user so the admin list shows the current name and plan (and flags
+    // authors who have since deleted their account).
+    const users = await User.find({ _id: { $in: items.map(i => i.user) } }, 'name email plan').lean();
+    const byId = new Map(users.map(u => [u._id.toString(), u]));
+    res.json(items.map(i => {
+      const u = byId.get(i.user?.toString());
+      return {
+        id: i._id,
+        userId: i.user,
+        name: u?.name || '',
+        email: u?.email || i.email || '',
+        plan: u?.plan || i.plan || 'free',
+        deletedUser: !u,
+        message: i.message,
+        reply: i.reply || '',
+        repliedAt: i.repliedAt || null,
+        replyReadAt: i.replyReadAt || null,
+        createdAt: i.createdAt,
+      };
+    }));
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Answer one feedback message. The user is told two ways — a push to their
+// devices and an email — because push may never have been granted, and the
+// reply itself lands in their Settings screen.
+app.post('/api/admin/feedback/:id/reply', authMiddleware, async (req, res) => {
+  try {
+    if (!authMiddleware.isAdminEmail(req.user.email)) return res.status(403).json({ error: 'Forbidden' });
+    const reply = (req.body.reply || '').toString().trim().slice(0, 4000);
+    if (!reply) return res.status(400).json({ error: 'Reply required' });
+
+    const item = await Feedback.findByIdAndUpdate(
+      req.params.id,
+      // Re-replying clears replyReadAt so the user sees the new answer as unread.
+      { reply, repliedAt: new Date(), $unset: { replyReadAt: 1 } },
+      { new: true }
+    );
+    if (!item) return res.status(404).json({ error: 'Not found' });
+
+    const recipient = await User.findById(item.user);
+    if (recipient) {
+      sendPushToUser(recipient._id, {
+        title: '💬 RenewBell replied to your feedback',
+        body: reply.length > 120 ? `${reply.slice(0, 117)}…` : reply,
+        url: '/settings',
+        tag: `feedback-${item._id}`,
+      });
+      sendEmail(
+        recipient.email,
+        'RenewBell replied to your feedback',
+        `You wrote:\n\n"${item.message}"\n\nOur reply:\n\n${reply}\n\nYou can see this any time in RenewBell under Settings › Your Feedback.`,
+        `<div style="font-family:sans-serif;max-width:520px">
+          <h2 style="color:#0F172A">We replied to your feedback</h2>
+          <p style="color:#64748B;font-size:13px">You wrote:</p>
+          <blockquote style="margin:0 0 16px;padding:10px 14px;border-left:3px solid #CBD5E1;color:#475569">${escapeHtml(item.message)}</blockquote>
+          <p style="color:#64748B;font-size:13px">Our reply:</p>
+          <blockquote style="margin:0 0 20px;padding:10px 14px;border-left:3px solid #06B6D4;color:#0F172A">${escapeHtml(reply)}</blockquote>
+          <p style="color:#64748B;font-size:13px">You can see this any time in RenewBell under <strong>Settings › Your Feedback</strong>.</p>
+        </div>`
+      );
+    }
+    res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Server error' }); }
 });
 
@@ -228,6 +311,33 @@ app.post('/api/feedback', authMiddleware, async (req, res) => {
     notifyAdmin(
       '💬 New RenewBell feedback',
       `From: ${req.user.name || 'Unknown'} <${req.user.email}> (${req.user.plan})\n\n${message}`
+    );
+    res.json({ ok: true });
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+// The user's own messages and any replies — powers the thread list in Settings.
+app.get('/api/feedback/mine', authMiddleware, async (req, res) => {
+  try {
+    const items = await Feedback.find({ user: req.user._id }, 'message reply repliedAt replyReadAt createdAt')
+      .sort({ createdAt: -1 }).limit(50).lean();
+    res.json(items.map(i => ({
+      id: i._id,
+      message: i.message,
+      reply: i.reply || '',
+      repliedAt: i.repliedAt || null,
+      createdAt: i.createdAt,
+      unread: !!i.repliedAt && !i.replyReadAt,
+    })));
+  } catch { res.status(500).json({ error: 'Server error' }); }
+});
+
+// Stamps replies as seen so the unread badge clears.
+app.post('/api/feedback/mine/read', authMiddleware, async (req, res) => {
+  try {
+    await Feedback.updateMany(
+      { user: req.user._id, repliedAt: { $exists: true }, replyReadAt: { $exists: false } },
+      { replyReadAt: new Date() }
     );
     res.json({ ok: true });
   } catch { res.status(500).json({ error: 'Server error' }); }

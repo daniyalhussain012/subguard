@@ -11,6 +11,7 @@ const EmailToken = require('../models/EmailToken');
 const Feedback = require('../models/Feedback');
 const authMiddleware = require('../middleware/auth');
 const { emailLimiter, loginLimiter, tokenLimiter } = require('../middleware/rateLimit');
+const { countryFromRequest, timezoneFromRequest } = require('../geo');
 const { notifyAdmin, sendEmail } = require('../notify');
 const router = express.Router();
 
@@ -357,6 +358,20 @@ router.get('/me', authMiddleware, async (req, res) => {
     let user = req.user;
     if (user.plan === 'premium' && user.premiumExpiresAt && new Date() > new Date(user.premiumExpiresAt)) {
       user = await User.findByIdAndUpdate(user._id, { plan: 'free' }, { new: true });
+    }
+    // Every app load lands here, which makes it the one place that backfills
+    // location for existing accounts as well as new ones. Only written once —
+    // re-deriving on every call would let a trip abroad rewrite the signup
+    // country, and the admin list is about where users came from.
+    if (!user.country) {
+      const country = countryFromRequest(req);
+      const timezone = timezoneFromRequest(req);
+      if (country || timezone) {
+        const patch = {};
+        if (country) patch.country = country;
+        if (timezone && !user.timezone) patch.timezone = timezone;
+        if (Object.keys(patch).length) user = await User.findByIdAndUpdate(user._id, patch, { new: true });
+      }
     }
     const { _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt } = user;
     res.json({ id: _id, email, name, avatar, plan, premiumActivatedAt, premiumExpiresAt, hasPassword: !!user.passwordHash });

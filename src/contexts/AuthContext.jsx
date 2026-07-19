@@ -18,6 +18,23 @@ function isTokenValid(t) {
   return true;
 }
 
+// Location hints for the admin signup list. The server prefers the CDN edge's
+// country header and only falls back to these, so they're a best-effort
+// nicety — wrapped in try/catch because older browsers lack Intl.Locale.
+function clientHintHeaders() {
+  const h = {};
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) h['X-Client-TZ'] = tz;
+  } catch {}
+  try {
+    const lang = navigator.language || '';
+    const region = (typeof Intl.Locale === 'function' ? new Intl.Locale(lang).region : lang.split('-')[1]) || '';
+    if (/^[A-Za-z]{2}$/.test(region)) h['X-Client-Region'] = region.toUpperCase();
+  } catch {}
+  return h;
+}
+
 export function AuthProvider({ children }) {
   const stored = localStorage.getItem('subguard_token');
   const valid = isTokenValid(stored) ? stored : null;
@@ -30,7 +47,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}`, ...clientHintHeaders() } })
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setUser({ ...data, id: String(data.id) }); })
       .catch(() => {});

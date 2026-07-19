@@ -10,6 +10,12 @@ const userSchema = new mongoose.Schema({
   name: String,
   avatar: String,
   plan: { type: String, enum: ['free','premium'], default: 'free' },
+  // Best-effort signup location for the admin list — ISO-3166 alpha-2 from the
+  // CDN edge header, with the browser's timezone as a softer secondary signal.
+  // Never blocks anything; absent for accounts created before this shipped
+  // until they next open the app (see the backfill in /auth/me).
+  country: String,
+  timezone: String,
   stripeCustomerId: String,
   stripeSessionId: String,
   premiumActivatedAt: Date,

@@ -81,6 +81,61 @@ export default function Settings() {
       .then(d => { if (d) setAdminData(d) })
       .catch(() => {})
   }, [])
+
+  const [myFeedback, setMyFeedback] = useState([])
+  const [adminFeedback, setAdminFeedback] = useState(null)
+  const [replyDrafts, setReplyDrafts] = useState({})
+  const [replySaving, setReplySaving] = useState(null)
+
+  const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('subguard_token') || ''}` })
+
+  // The user's own feedback threads, so replies are readable in-app and not
+  // only in the notification that announced them.
+  useEffect(() => {
+    fetch(`${API_URL}/api/feedback/mine`, { headers: authHeader() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setMyFeedback(d) })
+      .catch(() => {})
+  }, [])
+
+  // Clear the unread badge only after the reply has been on screen a moment —
+  // marking it read on fetch would wipe the highlight before it's noticed.
+  useEffect(() => {
+    if (!myFeedback.some(f => f.unread)) return
+    const t = setTimeout(() => {
+      fetch(`${API_URL}/api/feedback/mine/read`, { method: 'POST', headers: authHeader() }).catch(() => {})
+    }, 2500)
+    return () => clearTimeout(t)
+  }, [myFeedback])
+
+  // Admin feedback inbox — only fetched once the admin probe above succeeded.
+  useEffect(() => {
+    if (!adminData) return
+    fetch(`${API_URL}/api/admin/feedback`, { headers: authHeader() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setAdminFeedback(d) })
+      .catch(() => {})
+  }, [adminData])
+
+  async function handleSendReply(id) {
+    const reply = (replyDrafts[id] || '').trim()
+    if (!reply) return
+    setReplySaving(id)
+    try {
+      const r = await fetch(`${API_URL}/api/admin/feedback/${id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ reply }),
+      })
+      if (r.ok) {
+        setAdminFeedback(list => (list || []).map(f =>
+          f.id === id ? { ...f, reply, repliedAt: new Date().toISOString() } : f
+        ))
+        setReplyDrafts(d => ({ ...d, [id]: '' }))
+      }
+    } catch { /* leave the draft in place so the reply isn't lost */ }
+    setReplySaving(null)
+  }
   const [testPushState, setTestPushState] = useState('idle') // idle | sending
   const [testPushResult, setTestPushResult] = useState(null) // { stage, localShown, sent, devices, serverError }
   const [excelBusy, setExcelBusy] = useState(false)
@@ -677,6 +732,42 @@ export default function Settings() {
           >
             {feedbackSent ? <><CheckCircle size={14} /> Sent — thank you!</> : feedbackSending ? 'Sending…' : <><MessageSquare size={14} /> Send Feedback</>}
           </button>
+
+          {myFeedback.length > 0 && (
+            <div className="mt-5 pt-4 border-t border-slate-800/60">
+              <p className="text-xs font-semibold text-slate-400 mb-2.5 uppercase tracking-wide">Your Feedback</p>
+              <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                {myFeedback.map(f => (
+                  <div
+                    key={f.id}
+                    className={`rounded-xl p-3 border ${f.unread ? 'border-cyan-500/50 bg-cyan-500/5' : 'border-slate-800/60 bg-slate-800/30'}`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] text-slate-500">
+                        {f.createdAt ? new Date(f.createdAt).toLocaleDateString() : ''}
+                      </span>
+                      {f.unread && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 uppercase tracking-wide">
+                          New reply
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-300 whitespace-pre-wrap break-words">{f.message}</p>
+                    {f.reply ? (
+                      <div className="mt-2.5 pl-2.5 border-l-2 border-cyan-500/60">
+                        <p className="text-[10px] font-semibold text-cyan-400 mb-1">
+                          RenewBell replied{f.repliedAt ? ` · ${new Date(f.repliedAt).toLocaleDateString()}` : ''}
+                        </p>
+                        <p className="text-xs text-slate-200 whitespace-pre-wrap break-words">{f.reply}</p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-slate-500 italic">Awaiting reply — we'll notify you here.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </Section>
       )}
 
@@ -697,15 +788,86 @@ export default function Settings() {
           </div>
           <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
             {adminData.users.map(u => (
-              <div key={u.email + u.createdAt} className="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800/60 last:border-0">
+              <div key={u._id} className="flex items-center gap-2 text-xs py-1.5 border-b border-slate-800/60 last:border-0">
                 <div className="flex-1 min-w-0">
                   <div className="text-slate-200 font-medium truncate">{u.name || '—'}</div>
                   <div className="text-slate-500 truncate">{u.email}</div>
+                  {/* Full id in the tooltip — enough to look the account up without eating row width */}
+                  <div className="text-slate-600 font-mono text-[9px] truncate" title={u._id}>
+                    ID …{String(u._id).slice(-6)}{u.timezone ? ` · ${u.timezone}` : ''}
+                  </div>
                 </div>
+                <span className="shrink-0 text-slate-400 font-medium" title={u.timezone || ''}>{u.country || '—'}</span>
                 <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${u.plan === 'premium' ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-700/60 text-slate-400'}`}>
                   {u.plan === 'premium' ? 'PRO' : 'FREE'}
                 </span>
                 <span className="shrink-0 text-slate-600">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {adminFeedback && (
+        <Section icon={MessageSquare} title="Admin · Feedback Inbox">
+          {adminData?.unansweredCount > 0 && (
+            <p className="text-xs text-amber-400 mb-3">
+              {adminData.unansweredCount} message{adminData.unansweredCount === 1 ? '' : 's'} awaiting a reply
+            </p>
+          )}
+          {adminFeedback.length === 0 && <p className="text-xs text-slate-500">No feedback yet.</p>}
+          <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+            {adminFeedback.map(f => (
+              <div key={f.id} className="rounded-xl border border-slate-800/60 bg-slate-800/30 p-3">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-slate-200 font-medium truncate">
+                      {f.name || '—'} {f.deletedUser && <span className="text-slate-500 font-normal">(account deleted)</span>}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate">{f.email}</div>
+                    <div className="text-[9px] text-slate-600 font-mono truncate" title={f.userId}>
+                      ID …{String(f.userId || '').slice(-6)}
+                    </div>
+                  </div>
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${f.plan === 'premium' ? 'bg-amber-500/15 text-amber-400' : 'bg-slate-700/60 text-slate-400'}`}>
+                    {f.plan === 'premium' ? 'PRO' : 'FREE'}
+                  </span>
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${f.repliedAt ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                    {f.repliedAt ? 'REPLIED' : 'PENDING'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 whitespace-pre-wrap break-words">{f.message}</p>
+                <p className="text-[10px] text-slate-600 mt-1">
+                  {f.createdAt ? new Date(f.createdAt).toLocaleString() : ''}
+                </p>
+
+                {f.reply && (
+                  <div className="mt-2 pl-2.5 border-l-2 border-emerald-500/60">
+                    <p className="text-[10px] font-semibold text-emerald-400 mb-1">
+                      You replied{f.repliedAt ? ` · ${new Date(f.repliedAt).toLocaleDateString()}` : ''}
+                      {f.replyReadAt ? ' · seen' : ' · unseen'}
+                    </p>
+                    <p className="text-xs text-slate-200 whitespace-pre-wrap break-words">{f.reply}</p>
+                  </div>
+                )}
+
+                <div className="mt-2.5">
+                  <textarea
+                    className="input min-h-[64px] resize-none text-xs"
+                    placeholder={f.reply ? 'Send another reply…' : 'Write a reply — the user gets a notification and sees it in Settings.'}
+                    value={replyDrafts[f.id] || ''}
+                    onChange={e => setReplyDrafts(d => ({ ...d, [f.id]: e.target.value }))}
+                    maxLength={4000}
+                    disabled={f.deletedUser}
+                  />
+                  <button
+                    onClick={() => handleSendReply(f.id)}
+                    disabled={!(replyDrafts[f.id] || '').trim() || replySaving === f.id || f.deletedUser}
+                    className="btn-primary w-full justify-center mt-1.5 py-1.5 text-xs disabled:opacity-40"
+                  >
+                    {replySaving === f.id ? 'Sending…' : f.deletedUser ? 'User no longer exists' : 'Send Reply'}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
